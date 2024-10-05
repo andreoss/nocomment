@@ -52,6 +52,26 @@ func TestTokenizeSeparatesCommentsAndStrings(t *testing.T) {
 	}
 }
 
+func TestTokenizeByteOffsetsWithMultibyte(t *testing.T) {
+	src := []byte("package main\n// \u201cx\u201d\nvar s = 1\n")
+	tokens, err := Tokenize(src)
+	if err != nil {
+		t.Fatalf("Tokenize: %v", err)
+	}
+	found := false
+	for _, tok := range tokens {
+		if commentNames[tok.Name] {
+			found = true
+			if got := string(src[tok.Start : tok.Stop+1]); got != "// \u201cx\u201d" {
+				t.Fatalf("comment bytes = %q", got)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("no comment in %+v", tokens)
+	}
+}
+
 func TestTokenizePositions(t *testing.T) {
 	tokens, err := Tokenize([]byte("package main // c\n"))
 	if err != nil {

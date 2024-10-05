@@ -44,35 +44,35 @@ func Default() *lang.Registry {
 
 func javaTokens(src []byte) ([]lexer.Token, error) {
 	l := java.NewJavaLexer(antlr4.NewInputStream(string(src)))
-	return lexer.Collect(l.NextToken, l.SymbolicNames), nil
+	return lexer.Collect(src, l.NextToken, l.SymbolicNames), nil
 }
 
 func htmlTokens(src []byte) ([]lexer.Token, error) {
 	l := html.NewHTMLLexer(antlr4.NewInputStream(string(src)))
-	return lexer.Collect(l.NextToken, l.SymbolicNames), nil
+	return lexer.Collect(src, l.NextToken, l.SymbolicNames), nil
 }
 
 func kotlinTokens(src []byte) ([]lexer.Token, error) {
 	l := kotlin.NewKotlinLexer(antlr4.NewInputStream(string(src)))
-	return lexer.Collect(l.NextToken, l.SymbolicNames), nil
+	return lexer.Collect(src, l.NextToken, l.SymbolicNames), nil
 }
 
 func sqliteTokens(src []byte) ([]lexer.Token, error) {
 	l := sqlite.NewSQLiteLexer(antlr4.NewInputStream(string(src)))
-	return lexer.Collect(l.NextToken, l.SymbolicNames), nil
+	return lexer.Collect(src, l.NextToken, l.SymbolicNames), nil
 }
 
 func tomlTokens(src []byte) ([]lexer.Token, error) {
 	l := toml.NewTomlLexer(antlr4.NewInputStream(string(src)))
-	return lexer.Collect(l.NextToken, l.SymbolicNames), nil
+	return lexer.Collect(src, l.NextToken, l.SymbolicNames), nil
 }
 
 func cppTokens(src []byte) ([]lexer.Token, error) {
 	l := cpp.NewCPP14Lexer(antlr4.NewInputStream(string(src)))
-	return lexer.Collect(l.NextToken, l.SymbolicNames), nil
+	return lexer.Collect(src, l.NextToken, l.SymbolicNames), nil
 }
 
 func postgresqlTokens(src []byte) ([]lexer.Token, error) {
 	l := postgresql.NewPostgreSQLLexer(antlr4.NewInputStream(string(src)))
-	return lexer.Collect(l.NextToken, l.SymbolicNames), nil
+	return lexer.Collect(src, l.NextToken, l.SymbolicNames), nil
 }
