@@ -20,6 +20,11 @@ func (p Processor) Process(path string, src []byte) ([]byte, error) {
 	return filter.Strip(l, src)
 }
 
+func (p Processor) Supports(path string) bool {
+	_, err := p.lookup(path)
+	return err == nil
+}
+
 func (p Processor) lookup(path string) (lang.Language, error) {
 	if p.Language != "" {
 		if l, ok := p.Registry.ByName(p.Language); ok {

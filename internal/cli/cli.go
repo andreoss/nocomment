@@ -5,8 +5,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"path/filepath"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strings"
 )
 
@@ -39,6 +41,7 @@ type Config struct {
 
 type Processor interface {
 	Process(path string, src []byte) ([]byte, error)
+	Supports(path string) bool
 }
 
 func Parse(args []string) (Config, error) {
@@ -86,11 +89,22 @@ func runWith(cfg Config, stdin io.Reader, stdout, stderr io.Writer, processor Pr
 	}
 	status := 0
 	for _, path := range cfg.Paths {
-		if err := processFile(cfg, path, stdout, processor, files); err != nil {
+		targets, err := expandPath(path, processor, files)
+		if err != nil {
 			fmt.Fprintf(stderr, "nocomment: %v\n", err)
 			status = 2
 			if !cfg.AllErrors {
 				return status
+			}
+			continue
+		}
+		for _, target := range targets {
+			if err := processFile(cfg, target, stdout, processor, files); err != nil {
+				fmt.Fprintf(stderr, "nocomment: %v\n", err)
+				status = 2
+				if !cfg.AllErrors {
+					return status
+				}
 			}
 		}
 	}
@@ -107,7 +121,16 @@ func runStdin(cfg Config, stdin io.Reader, stdout, stderr io.Writer, processor P
 		fmt.Fprintf(stderr, "nocomment: %v\n", err)
 		return 2
 	}
-	out, err := processor.Process("", src)
+	path := ""
+	if cfg.Lang == "" {
+		ext := shebangExtension(src)
+		if ext == "" {
+			fmt.Fprintln(stderr, "nocomment: standard input requires -lang or a recognized shebang")
+			return 2
+		}
+		path = "stdin" + ext
+	}
+	out, err := processor.Process(path, src)
 	if err != nil {
 		fmt.Fprintf(stderr, "nocomment: %v\n", err)
 		return 2
@@ -179,6 +202,107 @@ func processFile(cfg Config, path string, stdout io.Writer, processor Processor,
 		_, err = stdout.Write(out)
 		return err
 	}
+}
+
+func expandPath(path string, processor Processor, files FileSystem) ([]string, error) {
+	info, err := files.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return []string{path}, nil
+	}
+	return walkDir(path, processor, files)
+}
+
+func walkDir(root string, processor Processor, files FileSystem) ([]string, error) {
+	entries, err := files.ReadDir(root)
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+	var out []string
+	for _, entry := range entries {
+		name := filepath.Join(root, entry.Name())
+		if entry.IsDir() {
+			if skipDir(entry.Name()) {
+				continue
+			}
+			sub, err := walkDir(name, processor, files)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, sub...)
+			continue
+		}
+		if strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		if !processor.Supports(name) {
+			continue
+		}
+		out = append(out, name)
+	}
+	return out, nil
+}
+
+func skipDir(name string) bool {
+	if name == "" || strings.HasPrefix(name, ".") {
+		return true
+	}
+	switch name {
+	case "vendor", "node_modules", "bin", "build", "dist", "target", "scratch", "_build":
+		return true
+	}
+	return false
+}
+
+func shebangExtension(src []byte) string {
+	if !bytes.HasPrefix(src, []byte("#!")) {
+		return ""
+	}
+	line := src
+	if i := bytes.IndexByte(line, '\n'); i >= 0 {
+		line = line[:i]
+	}
+	fields := strings.Fields(string(line))
+	if len(fields) == 0 {
+		return ""
+	}
+	interp := filepath.Base(fields[0])
+	if interp == "env" {
+		interp = ""
+		for _, f := range fields[1:] {
+			if strings.HasPrefix(f, "-") {
+				continue
+			}
+			interp = filepath.Base(f)
+			break
+		}
+	}
+	switch trimVersion(interp) {
+	case "python":
+		return ".py"
+	case "node", "nodejs":
+		return ".js"
+	case "sh", "bash", "dash", "zsh", "ksh":
+		return ".sh"
+	case "ruby":
+		return ".rb"
+	case "php":
+		return ".php"
+	}
+	return ""
+}
+
+func trimVersion(name string) string {
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		if (c >= '0' && c <= '9') || c == '.' {
+			return name[:i]
+		}
+	}
+	return name
 }
 
 func versionString() string {

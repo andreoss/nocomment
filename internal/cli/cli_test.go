@@ -11,7 +11,8 @@ import (
 )
 
 type fakeProcessor struct {
-	fn func(path string, src []byte) ([]byte, error)
+	fn       func(path string, src []byte) ([]byte, error)
+	supports func(path string) bool
 }
 
 func (f fakeProcessor) Process(path string, src []byte) ([]byte, error) {
@@ -19,6 +20,13 @@ func (f fakeProcessor) Process(path string, src []byte) ([]byte, error) {
 		return f.fn(path, src)
 	}
 	return append([]byte(nil), src...), nil
+}
+
+func (f fakeProcessor) Supports(path string) bool {
+	if f.supports != nil {
+		return f.supports(path)
+	}
+	return true
 }
 
 func TestParseFlags(t *testing.T) {
@@ -212,23 +220,23 @@ func TestMissingFile(t *testing.T) {
 	}
 }
 
-func TestDirectoryRejected(t *testing.T) {
+func TestEmptyDirectory(t *testing.T) {
 	files := newMemFS()
 	files.files["pkg"] = &memFile{name: "pkg", mode: fs.ModeDir, dir: true}
-	var errBuf bytes.Buffer
-	status := runWith(Config{Paths: []string{"pkg"}}, strings.NewReader(""), &bytes.Buffer{}, &errBuf, fakeProcessor{}, files)
-	if status != 2 {
-		t.Fatalf("status = %d", status)
+	var out, errBuf bytes.Buffer
+	status := runWith(Config{Paths: []string{"pkg"}}, strings.NewReader(""), &out, &errBuf, fakeProcessor{}, files)
+	if status != 0 {
+		t.Fatalf("status = %d, stderr = %q", status, errBuf.String())
 	}
-	if !strings.Contains(errBuf.String(), "is a directory") {
-		t.Fatalf("stderr = %q", errBuf.String())
+	if out.Len() != 0 {
+		t.Fatalf("out = %q", out.String())
 	}
 }
 
 func TestStdinDefault(t *testing.T) {
 	processor := fakeProcessor{fn: func(string, []byte) ([]byte, error) { return []byte("x \n"), nil }}
 	var out, errBuf bytes.Buffer
-	status := runWith(Config{}, strings.NewReader("x // c\n"), &out, &errBuf, processor, newMemFS())
+	status := runWith(Config{Lang: "go"}, strings.NewReader("x // c\n"), &out, &errBuf, processor, newMemFS())
 	if status != 0 {
 		t.Fatalf("status = %d, stderr = %q", status, errBuf.String())
 	}
@@ -240,7 +248,7 @@ func TestStdinDefault(t *testing.T) {
 func TestStdinList(t *testing.T) {
 	processor := fakeProcessor{fn: func(string, []byte) ([]byte, error) { return []byte("x \n"), nil }}
 	var out bytes.Buffer
-	status := runWith(Config{List: true}, strings.NewReader("x // c\n"), &out, &bytes.Buffer{}, processor, newMemFS())
+	status := runWith(Config{List: true, Lang: "go"}, strings.NewReader("x // c\n"), &out, &bytes.Buffer{}, processor, newMemFS())
 	if status != 0 {
 		t.Fatalf("status = %d", status)
 	}
@@ -269,7 +277,7 @@ func TestUnifiedDiffIdentical(t *testing.T) {
 func TestStdinDiff(t *testing.T) {
 	processor := fakeProcessor{fn: func(string, []byte) ([]byte, error) { return []byte("x \n"), nil }}
 	var out bytes.Buffer
-	status := runWith(Config{Diff: true}, strings.NewReader("x // c\n"), &out, &bytes.Buffer{}, processor, newMemFS())
+	status := runWith(Config{Diff: true, Lang: "go"}, strings.NewReader("x // c\n"), &out, &bytes.Buffer{}, processor, newMemFS())
 	if status != 0 {
 		t.Fatalf("status = %d", status)
 	}
@@ -280,7 +288,7 @@ func TestStdinDiff(t *testing.T) {
 
 func TestStdinUnchanged(t *testing.T) {
 	var out bytes.Buffer
-	status := runWith(Config{List: true}, strings.NewReader("x\n"), &out, &bytes.Buffer{}, fakeProcessor{}, newMemFS())
+	status := runWith(Config{List: true, Lang: "go"}, strings.NewReader("x\n"), &out, &bytes.Buffer{}, fakeProcessor{}, newMemFS())
 	if status != 0 {
 		t.Fatalf("status = %d", status)
 	}
@@ -292,7 +300,7 @@ func TestStdinUnchanged(t *testing.T) {
 func TestStdinProcessorError(t *testing.T) {
 	processor := fakeProcessor{fn: func(string, []byte) ([]byte, error) { return nil, errors.New("stdin boom") }}
 	var errBuf bytes.Buffer
-	status := runWith(Config{}, strings.NewReader("x\n"), &bytes.Buffer{}, &errBuf, processor, newMemFS())
+	status := runWith(Config{Lang: "go"}, strings.NewReader("x\n"), &bytes.Buffer{}, &errBuf, processor, newMemFS())
 	if status != 2 {
 		t.Fatalf("status = %d", status)
 	}
@@ -315,6 +323,8 @@ func TestStdinReadError(t *testing.T) {
 type readFailFS struct{ inner *memFS }
 
 func (r readFailFS) Stat(name string) (fs.FileInfo, error) { return r.inner.Stat(name) }
+
+func (r readFailFS) ReadDir(name string) ([]fs.DirEntry, error) { return r.inner.ReadDir(name) }
 
 func (r readFailFS) ReadFile(string) ([]byte, error) { return nil, errors.New("read fail") }
 
@@ -380,5 +390,116 @@ func TestVersionString(t *testing.T) {
 func TestHelpMentionsVersion(t *testing.T) {
 	if !strings.Contains(usageText, "-version") {
 		t.Fatal("usage missing -version")
+	}
+}
+
+func TestWalkDirectoryFiltersAndOrders(t *testing.T) {
+	files := newMemFS()
+	files.put("tree/b.go", []byte("b // c\n"), 0o644)
+	files.put("tree/a.go", []byte("a // c\n"), 0o644)
+	files.put("tree/notes.txt", []byte("x\n"), 0o644)
+	files.put("tree/sub/c.go", []byte("c // c\n"), 0o644)
+	processor := fakeProcessor{
+		fn:       func(path string, src []byte) ([]byte, error) { return append([]byte(path+":"), src...), nil },
+		supports: func(path string) bool { return strings.HasSuffix(path, ".go") },
+	}
+	var out bytes.Buffer
+	status := runWith(Config{Paths: []string{"tree"}}, strings.NewReader(""), &out, &bytes.Buffer{}, processor, files)
+	if status != 0 {
+		t.Fatalf("status = %d", status)
+	}
+	want := "tree/a.go:a // c\ntree/b.go:b // c\ntree/sub/c.go:c // c\n"
+	if out.String() != want {
+		t.Fatalf("got %q want %q", out.String(), want)
+	}
+}
+
+func TestWalkSkipsVCSAndBuildDirs(t *testing.T) {
+	files := newMemFS()
+	files.put("tree/.git/config.go", []byte("x\n"), 0o644)
+	files.put("tree/vendor/v.go", []byte("x\n"), 0o644)
+	files.put("tree/node_modules/n.go", []byte("x\n"), 0o644)
+	files.put("tree/.hidden.go", []byte("x\n"), 0o644)
+	files.put("tree/keep.go", []byte("k // c\n"), 0o644)
+	processor := fakeProcessor{
+		fn:       func(path string, src []byte) ([]byte, error) { return append([]byte(path+":"), src...), nil },
+		supports: func(path string) bool { return strings.HasSuffix(path, ".go") },
+	}
+	var out bytes.Buffer
+	status := runWith(Config{Paths: []string{"tree"}}, strings.NewReader(""), &out, &bytes.Buffer{}, processor, files)
+	if status != 0 {
+		t.Fatalf("status = %d", status)
+	}
+	if out.String() != "tree/keep.go:k // c\n" {
+		t.Fatalf("got %q", out.String())
+	}
+}
+
+func TestExplicitUnsupportedFileProcessed(t *testing.T) {
+	files := newMemFS()
+	files.put("x.txt", []byte("x\n"), 0o644)
+	called := false
+	processor := fakeProcessor{
+		fn:       func(path string, src []byte) ([]byte, error) { called = true; return src, nil },
+		supports: func(string) bool { return false },
+	}
+	status := runWith(Config{Paths: []string{"x.txt"}}, strings.NewReader(""), &bytes.Buffer{}, &bytes.Buffer{}, processor, files)
+	if status != 0 {
+		t.Fatalf("status = %d", status)
+	}
+	if !called {
+		t.Fatal("explicit file not processed")
+	}
+}
+
+func TestStdinShebangInference(t *testing.T) {
+	var gotPath string
+	processor := fakeProcessor{fn: func(path string, src []byte) ([]byte, error) {
+		gotPath = path
+		return []byte("x\n"), nil
+	}}
+	status := runWith(Config{}, strings.NewReader("#!/usr/bin/env python3\n# c\n"), &bytes.Buffer{}, &bytes.Buffer{}, processor, newMemFS())
+	if status != 0 {
+		t.Fatalf("status = %d", status)
+	}
+	if gotPath != "stdin.py" {
+		t.Fatalf("path = %q", gotPath)
+	}
+}
+
+func TestStdinShebangUnknown(t *testing.T) {
+	var errBuf bytes.Buffer
+	status := runWith(Config{}, strings.NewReader("#!/usr/bin/perl\n# c\n"), &bytes.Buffer{}, &errBuf, fakeProcessor{}, newMemFS())
+	if status != 2 {
+		t.Fatalf("status = %d", status)
+	}
+	if !strings.Contains(errBuf.String(), "requires -lang") {
+		t.Fatalf("stderr = %q", errBuf.String())
+	}
+}
+
+func TestStdinNoShebangRequiresLang(t *testing.T) {
+	var errBuf bytes.Buffer
+	status := runWith(Config{}, strings.NewReader("x // c\n"), &bytes.Buffer{}, &errBuf, fakeProcessor{}, newMemFS())
+	if status != 2 {
+		t.Fatalf("status = %d", status)
+	}
+	if !strings.Contains(errBuf.String(), "requires -lang") {
+		t.Fatalf("stderr = %q", errBuf.String())
+	}
+}
+
+func TestStdinLangOverride(t *testing.T) {
+	gotPath := "unset"
+	processor := fakeProcessor{fn: func(path string, src []byte) ([]byte, error) {
+		gotPath = path
+		return src, nil
+	}}
+	status := runWith(Config{Lang: "go"}, strings.NewReader("package main\n"), &bytes.Buffer{}, &bytes.Buffer{}, processor, newMemFS())
+	if status != 0 {
+		t.Fatalf("status = %d", status)
+	}
+	if gotPath != "" {
+		t.Fatalf("path = %q", gotPath)
 	}
 }

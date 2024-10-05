@@ -52,3 +52,18 @@ func TestProcessUnsupportedFile(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestSupports(t *testing.T) {
+	if !newProcessor("").Supports("main.go") {
+		t.Fatal("go not supported")
+	}
+	if newProcessor("").Supports("main.zzz") {
+		t.Fatal("zzz supported")
+	}
+	if !newProcessor("go").Supports("") {
+		t.Fatal("forced language not supported")
+	}
+	if newProcessor("nope").Supports("main.go") {
+		t.Fatal("unknown language supported")
+	}
+}
