@@ -12,6 +12,13 @@ var commentNames = map[string]bool{
 	"COMMENT_NLSEMI":      true,
 }
 
+func testText(src []byte, tok Token) string {
+	if tok.Start < 0 || tok.Stop+1 > len(src) || tok.Stop < tok.Start-1 {
+		return ""
+	}
+	return string(src[tok.Start : tok.Stop+1])
+}
+
 func TestTokenizeSeparatesCommentsAndStrings(t *testing.T) {
 	src := []byte("package main\n// first\nvar s = \"// not a comment\"\n/* block */\nvar t = `/* raw */`\n")
 	tokens, err := Tokenize(src)
@@ -25,19 +32,19 @@ func TestTokenizeSeparatesCommentsAndStrings(t *testing.T) {
 		if commentNames[tok.Name] {
 			comments++
 			if tok.Channel == 0 {
-				t.Fatalf("comment %q on default channel", tok.Text)
+				t.Fatalf("comment %q on default channel", testText(src, tok))
 			}
 		}
 		if tok.Name == "INTERPRETED_STRING_LIT" {
 			interpreted++
-			if tok.Text != "\"// not a comment\"" {
-				t.Fatalf("interpreted string = %q", tok.Text)
+			if testText(src, tok) != "\"// not a comment\"" {
+				t.Fatalf("interpreted string = %q", testText(src, tok))
 			}
 		}
 		if tok.Name == "RAW_STRING_LIT" {
 			raw++
-			if tok.Text != "`/* raw */`" {
-				t.Fatalf("raw string = %q", tok.Text)
+			if testText(src, tok) != "`/* raw */`" {
+				t.Fatalf("raw string = %q", testText(src, tok))
 			}
 		}
 	}
@@ -62,7 +69,7 @@ func TestTokenizeByteOffsetsWithMultibyte(t *testing.T) {
 	for _, tok := range tokens {
 		if commentNames[tok.Name] {
 			found = true
-			if got := string(src[tok.Start : tok.Stop+1]); got != "// \u201cx\u201d" {
+			if got := testText(src, tok); got != "// \u201cx\u201d" {
 				t.Fatalf("comment bytes = %q", got)
 			}
 		}
@@ -73,7 +80,8 @@ func TestTokenizeByteOffsetsWithMultibyte(t *testing.T) {
 }
 
 func TestTokenizePositions(t *testing.T) {
-	tokens, err := Tokenize([]byte("package main // c\n"))
+	src := []byte("package main // c\n")
+	tokens, err := Tokenize(src)
 	if err != nil {
 		t.Fatalf("Tokenize: %v", err)
 	}
@@ -81,8 +89,8 @@ func TestTokenizePositions(t *testing.T) {
 	for _, tok := range tokens {
 		if commentNames[tok.Name] {
 			found = true
-			if strings.TrimSpace(tok.Text) != "// c" {
-				t.Fatalf("text = %q", tok.Text)
+			if strings.TrimSpace(testText(src, tok)) != "// c" {
+				t.Fatalf("text = %q", testText(src, tok))
 			}
 			if tok.Line != 1 {
 				t.Fatalf("line = %d", tok.Line)

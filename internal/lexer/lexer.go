@@ -40,7 +40,6 @@ func Collect(src []byte, next func() antlr4.Token, names []string) []Token {
 		tokens = append(tokens, Token{
 			Type:    tok.GetTokenType(),
 			Name:    symbolicName(names, tok.GetTokenType()),
-			Text:    tok.GetText(),
 			Channel: tok.GetChannel(),
 			Line:    tok.GetLine(),
 			Column:  tok.GetColumn(),
