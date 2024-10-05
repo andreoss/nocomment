@@ -47,6 +47,7 @@ func Default() *lang.Registry {
 		[]string{"COMMENT", "LINE_COMMENT"}))
 	r.Register(lang.NewGeneric("postgresql", []string{".pgsql"}, postgresqlTokens,
 		[]string{"BlockComment", "LineComment", "UnterminatedBlockComment"}))
+	registerScanners(r)
 	return r
 }
 
