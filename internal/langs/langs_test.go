@@ -66,7 +66,7 @@ func TestExtensions(t *testing.T) {
 		".js": "javascript", ".mjs": "javascript", ".ts": "typescript",
 		".kt": "kotlin", ".rs": "rust", ".scala": "scala", ".sqlite": "sqlite",
 		".sql": "sql", ".pgsql": "postgresql", ".toml": "toml",
-		".html": "html", ".htm": "html",
+		".html": "html", ".htm": "html", ".xml": "xml",
 	} {
 		l, ok := r.ByExtension("file" + ext)
 		if !ok {

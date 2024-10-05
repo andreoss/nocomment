@@ -26,6 +26,8 @@ func Default() *lang.Registry {
 		[]string{"MULTILINE_COMMENT", "SINGLE_LINE_COMMENT"}))
 	r.Register(lang.NewGeneric("html", []string{".html", ".htm"}, htmlTokens,
 		[]string{"HTML_COMMENT", "HTML_CONDITIONAL_COMMENT"}))
+	r.Register(lang.NewGeneric("xml", []string{".xml"}, htmlTokens,
+		[]string{"HTML_COMMENT", "HTML_CONDITIONAL_COMMENT"}))
 	r.Register(lang.NewGeneric("kotlin", []string{".kt", ".kts"}, kotlinTokens,
 		[]string{"DelimitedComment", "Inside_Comment", "LineComment", "StrExpr_Comment"}))
 	r.Register(lang.NewGeneric("sqlite", []string{".sqlite", ".sqlite3"}, sqliteTokens,

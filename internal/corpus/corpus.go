@@ -112,10 +112,22 @@ func Cases() []Case {
 			Expected: "\nselect '-- keep';\n\n",
 		},
 		{
+			Language: "postgresql",
+			ID:       "ID-55",
+			Input:    "-- remove me\nselect '-- keep';\n/* drop */\n",
+			Expected: "\nselect '-- keep';\n\n",
+		},
+		{
 			Language: "html",
 			ID:       "ID-24",
 			Input:    "<!-- remove me -->\n<p>keep</p>\n",
 			Expected: "\n<p>keep</p>\n",
+		},
+		{
+			Language: "xml",
+			ID:       "ID-48",
+			Input:    "<?xml version=\"1.0\"?>\n<!-- remove me -->\n<root>keep</root>\n",
+			Expected: "<?xml version=\"1.0\"?>\n\n<root>keep</root>\n",
 		},
 		{
 			Language: "jsonc",
