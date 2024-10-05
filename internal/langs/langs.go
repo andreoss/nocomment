@@ -9,11 +9,8 @@ import (
 	"nocomment/internal/lexer/generated/cpp"
 	"nocomment/internal/lexer/generated/html"
 	"nocomment/internal/lexer/generated/java"
-	"nocomment/internal/lexer/generated/javascript"
 	"nocomment/internal/lexer/generated/kotlin"
 	"nocomment/internal/lexer/generated/postgresql"
-	"nocomment/internal/lexer/generated/rust"
-	"nocomment/internal/lexer/generated/scala"
 	"nocomment/internal/lexer/generated/sqlite"
 	"nocomment/internal/lexer/generated/toml"
 )
@@ -25,26 +22,18 @@ func Default() *lang.Registry {
 		[]string{"COMMENT", "LINE_COMMENT"}))
 	r.Register(lang.NewGeneric("c", []string{".c", ".h"}, cppTokens,
 		[]string{"BlockComment", "LineComment"}))
-	r.Register(lang.NewGeneric("typescript", []string{".ts", ".tsx"}, javascriptTokens,
-		[]string{"CDataComment", "HtmlComment", "MultiLineComment", "SingleLineComment"}))
 	r.Register(lang.NewGeneric("sql", []string{".sql"}, sqliteTokens,
 		[]string{"MULTILINE_COMMENT", "SINGLE_LINE_COMMENT"}))
 	r.Register(lang.NewGeneric("html", []string{".html", ".htm"}, htmlTokens,
 		[]string{"HTML_COMMENT", "HTML_CONDITIONAL_COMMENT"}))
-	r.Register(lang.NewGeneric("javascript", []string{".js", ".mjs", ".cjs"}, javascriptTokens,
-		[]string{"CDataComment", "HtmlComment", "MultiLineComment", "SingleLineComment"}))
 	r.Register(lang.NewGeneric("kotlin", []string{".kt", ".kts"}, kotlinTokens,
 		[]string{"DelimitedComment", "Inside_Comment", "LineComment", "StrExpr_Comment"}))
 	r.Register(lang.NewGeneric("sqlite", []string{".sqlite", ".sqlite3"}, sqliteTokens,
 		[]string{"MULTILINE_COMMENT", "SINGLE_LINE_COMMENT"}))
 	r.Register(lang.NewGeneric("toml", []string{".toml"}, tomlTokens,
 		[]string{"COMMENT"}))
-	r.Register(lang.NewGeneric("rust", []string{".rs"}, rustTokens,
-		[]string{"BLOCK_COMMENT", "BLOCK_COMMENT_OR_DOC", "LINE_COMMENT"}))
 	r.Register(lang.NewGeneric("cpp", []string{".cpp", ".cc", ".cxx", ".hpp", ".hh"}, cppTokens,
 		[]string{"BlockComment", "LineComment"}))
-	r.Register(lang.NewGeneric("scala", []string{".scala"}, scalaTokens,
-		[]string{"COMMENT", "LINE_COMMENT"}))
 	r.Register(lang.NewGeneric("postgresql", []string{".pgsql"}, postgresqlTokens,
 		[]string{"BlockComment", "LineComment", "UnterminatedBlockComment"}))
 	registerScanners(r)
@@ -58,11 +47,6 @@ func javaTokens(src []byte) ([]lexer.Token, error) {
 
 func htmlTokens(src []byte) ([]lexer.Token, error) {
 	l := html.NewHTMLLexer(antlr4.NewInputStream(string(src)))
-	return lexer.Collect(l.NextToken, l.SymbolicNames), nil
-}
-
-func javascriptTokens(src []byte) ([]lexer.Token, error) {
-	l := javascript.NewJavaScriptLexer(antlr4.NewInputStream(string(src)))
 	return lexer.Collect(l.NextToken, l.SymbolicNames), nil
 }
 
@@ -81,18 +65,8 @@ func tomlTokens(src []byte) ([]lexer.Token, error) {
 	return lexer.Collect(l.NextToken, l.SymbolicNames), nil
 }
 
-func rustTokens(src []byte) ([]lexer.Token, error) {
-	l := rust.NewRustLexer(antlr4.NewInputStream(string(src)))
-	return lexer.Collect(l.NextToken, l.SymbolicNames), nil
-}
-
 func cppTokens(src []byte) ([]lexer.Token, error) {
 	l := cpp.NewCPP14Lexer(antlr4.NewInputStream(string(src)))
-	return lexer.Collect(l.NextToken, l.SymbolicNames), nil
-}
-
-func scalaTokens(src []byte) ([]lexer.Token, error) {
-	l := scala.NewScalaLexer(antlr4.NewInputStream(string(src)))
 	return lexer.Collect(l.NextToken, l.SymbolicNames), nil
 }
 

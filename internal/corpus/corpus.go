@@ -130,6 +130,24 @@ func Cases() []Case {
 			Expected: "\nkey = \"# keep\"\n",
 		},
 		{
+			Language: "javascript",
+			ID:       "ID-12",
+			Input:    "const a = `// not`; // drop\n",
+			Expected: "const a = `// not`; \n",
+		},
+		{
+			Language: "rust",
+			ID:       "ID-15",
+			Input:    "let s = 1; /* a /* b */ c */\nlet t = 2;\n",
+			Expected: "let s = 1; \nlet t = 2;\n",
+		},
+		{
+			Language: "scala",
+			ID:       "ID-21",
+			Input:    "val s = 1 /* a /* b */ c */\nval t = 2\n",
+			Expected: "val s = 1 \nval t = 2\n",
+		},
+		{
 			Language: "markdown",
 			ID:       "ID-28",
 			Input:    "<!-- remove me -->\ntext\n",

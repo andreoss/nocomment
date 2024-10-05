@@ -103,4 +103,44 @@ func registerScanners(r *lang.Registry) {
 	r.Register(lang.NewGeneric("markdown", []string{".md", ".markdown"}, scannerTokens(scan.Syntax{
 		Block: [][2]string{{"<!--", "-->"}},
 	}), []string{"COMMENT"}))
+
+	r.Register(lang.NewGeneric("javascript", []string{".js", ".mjs", ".cjs"}, scannerTokens(scan.Syntax{
+		Line:  []string{"//"},
+		Block: [][2]string{{"/*", "*/"}},
+		Strings: []scan.StringRule{
+			{Open: "`", Close: "`", Escape: true, Multiline: true},
+			{Open: `"`, Close: `"`, Escape: true},
+			{Open: `'`, Close: `'`, Escape: true},
+		},
+	}), []string{"COMMENT"}))
+
+	r.Register(lang.NewGeneric("typescript", []string{".ts", ".tsx"}, scannerTokens(scan.Syntax{
+		Line:  []string{"//"},
+		Block: [][2]string{{"/*", "*/"}},
+		Strings: []scan.StringRule{
+			{Open: "`", Close: "`", Escape: true, Multiline: true},
+			{Open: `"`, Close: `"`, Escape: true},
+			{Open: `'`, Close: `'`, Escape: true},
+		},
+	}), []string{"COMMENT"}))
+
+	r.Register(lang.NewGeneric("rust", []string{".rs"}, scannerTokens(scan.Syntax{
+		Line:  []string{"//"},
+		Block: [][2]string{{"/*", "*/"}},
+		Nest:  true,
+		Strings: []scan.StringRule{
+			{Open: `r#"`, Close: `"#`, Multiline: true},
+			{Open: `"`, Close: `"`, Escape: true},
+		},
+	}), []string{"COMMENT"}))
+
+	r.Register(lang.NewGeneric("scala", []string{".scala"}, scannerTokens(scan.Syntax{
+		Line:  []string{"//"},
+		Block: [][2]string{{"/*", "*/"}},
+		Nest:  true,
+		Strings: []scan.StringRule{
+			{Open: `"""`, Close: `"""`, Multiline: true},
+			{Open: `"`, Close: `"`, Escape: true},
+		},
+	}), []string{"COMMENT"}))
 }
