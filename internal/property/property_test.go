@@ -67,8 +67,9 @@ func TestStrippedHasNoComments(t *testing.T) {
 			if err != nil {
 				t.Fatalf("tokenize: %v", err)
 			}
+			protect := filter.ShebangEnd(out)
 			for _, tok := range tokens {
-				if l.IsComment(tok.Name) {
+				if l.IsComment(tok.Name) && tok.Start >= protect {
 					t.Fatalf("comment remains after strip: %q", tok.Text)
 				}
 			}

@@ -22,6 +22,12 @@ func Cases() []Case {
 			Expected: "\ns = \"# keep\"\nx = 1  \n",
 		},
 		{
+			Language: "python",
+			ID:       "ID-47",
+			Input:    "#!/usr/bin/env python3\n# c\nx = 1\n",
+			Expected: "#!/usr/bin/env python3\n\nx = 1\n",
+		},
+		{
 			Language: "javascript",
 			ID:       "ID-12",
 			Input:    "// remove me\nconst s = \"// keep\";\n/* drop */\n",

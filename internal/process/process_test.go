@@ -67,3 +67,20 @@ func TestSupports(t *testing.T) {
 		t.Fatal("unknown language supported")
 	}
 }
+
+func TestProcessRejectsNonUTF8(t *testing.T) {
+	_, err := newProcessor("go").Process("", []byte{0xff, 0xfe})
+	if err == nil || !strings.Contains(err.Error(), "UTF-8") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestProcessAcceptsBOM(t *testing.T) {
+	got, err := newProcessor("go").Process("", []byte("\ufeffpackage main\n"))
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if !strings.HasPrefix(string(got), "\ufeff") {
+		t.Fatalf("BOM lost: %q", got)
+	}
+}

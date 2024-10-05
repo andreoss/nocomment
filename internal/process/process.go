@@ -2,6 +2,7 @@ package process
 
 import (
 	"errors"
+	"unicode/utf8"
 
 	"nocomment/internal/filter"
 	"nocomment/internal/lang"
@@ -13,6 +14,9 @@ type Processor struct {
 }
 
 func (p Processor) Process(path string, src []byte) ([]byte, error) {
+	if !utf8.Valid(src) {
+		return nil, errors.New("input is not valid UTF-8")
+	}
 	l, err := p.lookup(path)
 	if err != nil {
 		return nil, err

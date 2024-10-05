@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"nocomment/internal/lang/golang"
+	"nocomment/internal/langs"
 	"nocomment/internal/lexer"
 )
 
@@ -58,6 +59,20 @@ func TestRemoveCommentsKeepsTrailingNewline(t *testing.T) {
 	tokens := []lexer.Token{{Name: "LINE_COMMENT", Start: 0, Stop: 4}}
 	got := RemoveComments(src, tokens, func(n string) bool { return n == "LINE_COMMENT" })
 	if string(got) != "\nx\n" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestStripPreservesShebang(t *testing.T) {
+	l, ok := langs.Default().ByName("python")
+	if !ok {
+		t.Fatal("python not registered")
+	}
+	got, err := Strip(l, []byte("#!/usr/bin/env python3\n# c\nx = 1\n"))
+	if err != nil {
+		t.Fatalf("Strip: %v", err)
+	}
+	if string(got) != "#!/usr/bin/env python3\n\nx = 1\n" {
 		t.Fatalf("got %q", got)
 	}
 }

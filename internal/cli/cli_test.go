@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"errors"
+	"io"
 	"io/fs"
 	"runtime"
 	"strings"
@@ -149,8 +150,13 @@ func TestWriteOnlyChanged(t *testing.T) {
 	if status != 0 {
 		t.Fatalf("status = %d, stderr = %q", status, errBuf.String())
 	}
-	if files.writes != 1 {
-		t.Fatalf("writes = %d", files.writes)
+	if files.renames != 1 {
+		t.Fatalf("renames = %d", files.renames)
+	}
+	for name := range files.files {
+		if strings.Contains(name, "nocomment-") {
+			t.Fatalf("temp file left: %s", name)
+		}
 	}
 	if string(files.files["a.go"].data) != "x \n" {
 		t.Fatalf("a.go = %q", files.files["a.go"].data)
@@ -324,6 +330,8 @@ type readFailFS struct{ inner *memFS }
 
 func (r readFailFS) Stat(name string) (fs.FileInfo, error) { return r.inner.Stat(name) }
 
+func (r readFailFS) Lstat(name string) (fs.FileInfo, error) { return r.inner.Lstat(name) }
+
 func (r readFailFS) ReadDir(name string) ([]fs.DirEntry, error) { return r.inner.ReadDir(name) }
 
 func (r readFailFS) ReadFile(string) ([]byte, error) { return nil, errors.New("read fail") }
@@ -331,6 +339,20 @@ func (r readFailFS) ReadFile(string) ([]byte, error) { return nil, errors.New("r
 func (r readFailFS) WriteFile(name string, data []byte, perm fs.FileMode) error {
 	return r.inner.WriteFile(name, data, perm)
 }
+
+func (r readFailFS) Create(name string) (io.WriteCloser, error) { return r.inner.Create(name) }
+
+func (r readFailFS) CreateTemp(dir, pattern string) (TempFile, error) {
+	return r.inner.CreateTemp(dir, pattern)
+}
+
+func (r readFailFS) Chmod(name string, mode fs.FileMode) error { return r.inner.Chmod(name, mode) }
+
+func (r readFailFS) Rename(oldpath, newpath string) error {
+	return r.inner.Rename(oldpath, newpath)
+}
+
+func (r readFailFS) Remove(name string) error { return r.inner.Remove(name) }
 
 func TestFileReadError(t *testing.T) {
 	mem := newMemFS()
@@ -350,11 +372,112 @@ func TestOSFSMissingPath(t *testing.T) {
 	if _, err := fsys.Stat("nocomment-absent-file"); err == nil {
 		t.Fatal("Stat: expected error")
 	}
+	if _, err := fsys.Lstat("nocomment-absent-file"); err == nil {
+		t.Fatal("Lstat: expected error")
+	}
 	if _, err := fsys.ReadFile("nocomment-absent-file"); err == nil {
 		t.Fatal("ReadFile: expected error")
 	}
 	if err := fsys.WriteFile("nocomment-absent-dir/file", nil, 0o644); err == nil {
 		t.Fatal("WriteFile: expected error")
+	}
+	if _, err := fsys.ReadDir("nocomment-absent-dir"); err == nil {
+		t.Fatal("ReadDir: expected error")
+	}
+	if _, err := fsys.Create("nocomment-absent-dir/file"); err == nil {
+		t.Fatal("Create: expected error")
+	}
+	if _, err := fsys.CreateTemp("nocomment-absent-dir", "x"); err == nil {
+		t.Fatal("CreateTemp: expected error")
+	}
+	if err := fsys.Chmod("nocomment-absent-file", 0o644); err == nil {
+		t.Fatal("Chmod: expected error")
+	}
+	if err := fsys.Rename("nocomment-absent-a", "nocomment-absent-b"); err == nil {
+		t.Fatal("Rename: expected error")
+	}
+	if err := fsys.Remove("nocomment-absent-file"); err == nil {
+		t.Fatal("Remove: expected error")
+	}
+}
+
+func TestWriteAtomicCleansOnWriteError(t *testing.T) {
+	files := newMemFS()
+	files.put("a.go", []byte("x // c\n"), 0o644)
+	files.writeErr = errors.New("write fail")
+	processor := fakeProcessor{fn: func(string, []byte) ([]byte, error) { return []byte("x \n"), nil }}
+	var errBuf bytes.Buffer
+	status := runWith(Config{Write: true, Paths: []string{"a.go"}}, strings.NewReader(""), &bytes.Buffer{}, &errBuf, processor, files)
+	if status != 2 {
+		t.Fatalf("status = %d", status)
+	}
+	if !strings.Contains(errBuf.String(), "write fail") {
+		t.Fatalf("stderr = %q", errBuf.String())
+	}
+	if files.removes == 0 {
+		t.Fatal("temp not removed")
+	}
+	for name := range files.files {
+		if strings.Contains(name, "nocomment-") {
+			t.Fatalf("temp left: %s", name)
+		}
+	}
+}
+
+func TestWriteAtomicCleansOnChmodError(t *testing.T) {
+	files := newMemFS()
+	files.put("a.go", []byte("x // c\n"), 0o644)
+	files.chmodErr = errors.New("chmod fail")
+	processor := fakeProcessor{fn: func(string, []byte) ([]byte, error) { return []byte("x \n"), nil }}
+	var errBuf bytes.Buffer
+	status := runWith(Config{Write: true, Paths: []string{"a.go"}}, strings.NewReader(""), &bytes.Buffer{}, &errBuf, processor, files)
+	if status != 2 {
+		t.Fatalf("status = %d", status)
+	}
+	if !strings.Contains(errBuf.String(), "chmod fail") {
+		t.Fatalf("stderr = %q", errBuf.String())
+	}
+	if files.removes == 0 {
+		t.Fatal("temp not removed")
+	}
+}
+
+func TestWriteAtomicCleansOnRenameError(t *testing.T) {
+	files := newMemFS()
+	files.put("a.go", []byte("x // c\n"), 0o644)
+	files.renameErr = errors.New("rename fail")
+	processor := fakeProcessor{fn: func(string, []byte) ([]byte, error) { return []byte("x \n"), nil }}
+	var errBuf bytes.Buffer
+	status := runWith(Config{Write: true, Paths: []string{"a.go"}}, strings.NewReader(""), &bytes.Buffer{}, &errBuf, processor, files)
+	if status != 2 {
+		t.Fatalf("status = %d", status)
+	}
+	if !strings.Contains(errBuf.String(), "rename fail") {
+		t.Fatalf("stderr = %q", errBuf.String())
+	}
+	if files.removes == 0 {
+		t.Fatal("temp not removed")
+	}
+}
+
+func TestShebangExtension(t *testing.T) {
+	cases := map[string]string{
+		"#!/usr/bin/env python3\n":    ".py",
+		"#!/usr/bin/python2.7\n":      ".py",
+		"#!/usr/bin/env node\n":       ".js",
+		"#!/bin/bash\n":               ".sh",
+		"#!/bin/sh\n":                 ".sh",
+		"#!/usr/bin/ruby\n":           ".rb",
+		"#!/usr/bin/env php\n":        ".php",
+		"#!/usr/bin/env -S node -e\n": ".js",
+		"#!/usr/bin/perl\n":           "",
+		"package main\n":              "",
+		"":                            "",
+	}
+	for src, want := range cases {
+		if got := shebangExtension([]byte(src)); got != want {
+			t.Fatalf("shebangExtension(%q) = %q want %q", src, got, want)
+		}
 	}
 }
 
@@ -501,5 +624,55 @@ func TestStdinLangOverride(t *testing.T) {
 	}
 	if gotPath != "" {
 		t.Fatalf("path = %q", gotPath)
+	}
+}
+
+func TestWriteRefusesSymlink(t *testing.T) {
+	files := newMemFS()
+	files.put("real.go", []byte("x // c\n"), 0o644)
+	files.putLink("link.go", "real.go")
+	processor := fakeProcessor{fn: func(string, []byte) ([]byte, error) { return []byte("x \n"), nil }}
+	var errBuf bytes.Buffer
+	status := runWith(Config{Write: true, Paths: []string{"link.go"}}, strings.NewReader(""), &bytes.Buffer{}, &errBuf, processor, files)
+	if status != 2 {
+		t.Fatalf("status = %d", status)
+	}
+	if !strings.Contains(errBuf.String(), "symlink") {
+		t.Fatalf("stderr = %q", errBuf.String())
+	}
+	if string(files.files["real.go"].data) != "x // c\n" {
+		t.Fatalf("target changed: %q", files.files["real.go"].data)
+	}
+}
+
+func TestWriteRefusesReadOnly(t *testing.T) {
+	files := newMemFS()
+	files.put("ro.go", []byte("x // c\n"), 0o444)
+	processor := fakeProcessor{fn: func(string, []byte) ([]byte, error) { return []byte("x \n"), nil }}
+	var errBuf bytes.Buffer
+	status := runWith(Config{Write: true, Paths: []string{"ro.go"}}, strings.NewReader(""), &bytes.Buffer{}, &errBuf, processor, files)
+	if status != 2 {
+		t.Fatalf("status = %d", status)
+	}
+	if !strings.Contains(errBuf.String(), "read-only") {
+		t.Fatalf("stderr = %q", errBuf.String())
+	}
+	if string(files.files["ro.go"].data) != "x // c\n" {
+		t.Fatalf("content changed: %q", files.files["ro.go"].data)
+	}
+}
+
+func TestReadSymlinkAllowed(t *testing.T) {
+	files := newMemFS()
+	files.put("real.go", []byte("x // c\n"), 0o644)
+	files.putLink("link.go", "real.go")
+	processor := fakeProcessor{fn: func(string, []byte) ([]byte, error) { return []byte("x \n"), nil }}
+	var out bytes.Buffer
+	status := runWith(Config{Paths: []string{"link.go"}}, strings.NewReader(""), &out, &bytes.Buffer{}, processor, files)
+	if status != 0 {
+		t.Fatalf("status = %d", status)
+	}
+	if out.String() != "x \n" {
+		t.Fatalf("out = %q", out.String())
 	}
 }

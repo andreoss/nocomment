@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
@@ -183,7 +184,17 @@ func processFile(cfg Config, path string, stdout io.Writer, processor Processor,
 		if !changed {
 			return nil
 		}
-		return files.WriteFile(path, out, info.Mode())
+		if info.Mode().Perm()&0o200 == 0 {
+			return fmt.Errorf("%s: refusing to write read-only file", path)
+		}
+		link, err := files.Lstat(path)
+		if err != nil {
+			return err
+		}
+		if link.Mode()&fs.ModeSymlink != 0 {
+			return fmt.Errorf("%s: refusing to write through symlink", path)
+		}
+		return writeAtomic(files, path, out, info.Mode())
 	case cfg.List:
 		if changed {
 			if _, err := fmt.Fprintln(stdout, path); err != nil {
@@ -303,6 +314,32 @@ func trimVersion(name string) string {
 		}
 	}
 	return name
+}
+
+func writeAtomic(files FileSystem, path string, data []byte, perm fs.FileMode) error {
+	f, err := files.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".nocomment-*")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		files.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		files.Remove(tmp)
+		return err
+	}
+	if err := files.Chmod(tmp, perm); err != nil {
+		files.Remove(tmp)
+		return err
+	}
+	if err := files.Rename(tmp, path); err != nil {
+		files.Remove(tmp)
+		return err
+	}
+	return nil
 }
 
 func versionString() string {
