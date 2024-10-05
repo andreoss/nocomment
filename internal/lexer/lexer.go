@@ -18,17 +18,20 @@ type Token struct {
 }
 
 func Tokenize(src []byte) ([]Token, error) {
-	input := antlr4.NewInputStream(string(src))
-	lex := golang.NewGoLexer(input)
-	tokens := make([]Token, 0, len(src)/4+1)
+	lex := golang.NewGoLexer(antlr4.NewInputStream(string(src)))
+	return Collect(lex.NextToken, lex.SymbolicNames), nil
+}
+
+func Collect(next func() antlr4.Token, names []string) []Token {
+	tokens := make([]Token, 0, 64)
 	for {
-		tok := lex.NextToken()
+		tok := next()
 		if tok.GetTokenType() == antlr4.TokenEOF {
 			break
 		}
 		tokens = append(tokens, Token{
 			Type:    tok.GetTokenType(),
-			Name:    symbolicName(lex.SymbolicNames, tok.GetTokenType()),
+			Name:    symbolicName(names, tok.GetTokenType()),
 			Text:    tok.GetText(),
 			Channel: tok.GetChannel(),
 			Line:    tok.GetLine(),
@@ -37,7 +40,7 @@ func Tokenize(src []byte) ([]Token, error) {
 			Stop:    tok.GetStop(),
 		})
 	}
-	return tokens, nil
+	return tokens
 }
 
 func symbolicName(names []string, tokenType int) string {

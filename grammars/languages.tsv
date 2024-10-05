@@ -1,0 +1,12 @@
+lang	exts	pkg	dir	main	extra	base	transform	patch
+go	.go	golang	golang	GoLexer.g4	-	-	none	none
+java	.java	java	java/java	JavaLexer.g4	-	-	none	none
+kotlin	.kt,.kts	kotlin	kotlin/kotlin	KotlinLexer.g4	UnicodeClasses.g4	-	none	none
+sqlite	.sqlite,.sqlite3	sqlite	sql/sqlite	SQLiteLexer.g4	-	-	none	none
+toml	.toml	toml	toml	TomlLexer.g4	-	-	none	none
+html	.html,.htm	html	html	HTMLLexer.g4	-	-	none	none
+javascript	.js,.mjs,.cjs	javascript	javascript/javascript	JavaScriptLexer.g4	-	javascript_lexer_base.go	this	none
+rust	.rs	rust	rust	RustLexer.g4	-	rust_lexer_base.go	this	none
+postgresql	.pgsql	postgresql	sql/postgresql	PostgreSQLLexer.g4	-	postgresql_lexer_base.go,string_stack.go	this	none
+cpp	.cpp,.cc,.cxx,.hpp,.hh	cpp	cpp	CPP14Lexer.g4	-	-	none	skip
+scala	.scala	scala	scala/scala2	Scala.g4	-	-	none	skip

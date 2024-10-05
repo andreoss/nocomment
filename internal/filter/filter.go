@@ -27,6 +27,9 @@ func RemoveComments(src []byte, tokens []lexer.Token, isComment func(string) boo
 		if end < t.Start || end > len(src) {
 			end = t.Start
 		}
+		for end > t.Start && (src[end-1] == '\n' || src[end-1] == '\r') {
+			end--
+		}
 		if t.Start < last {
 			if end > last {
 				last = end

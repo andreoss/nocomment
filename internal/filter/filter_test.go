@@ -53,6 +53,15 @@ func TestRemoveCommentsEmpty(t *testing.T) {
 	}
 }
 
+func TestRemoveCommentsKeepsTrailingNewline(t *testing.T) {
+	src := []byte("-- c\nx\n")
+	tokens := []lexer.Token{{Name: "LINE_COMMENT", Start: 0, Stop: 4}}
+	got := RemoveComments(src, tokens, func(n string) bool { return n == "LINE_COMMENT" })
+	if string(got) != "\nx\n" {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestStripGo(t *testing.T) {
 	src := []byte("package main\n\n// remove me\nvar s = \"// keep\"\nfunc main() { /* drop */ }\n")
 	want := "package main\n\n\nvar s = \"// keep\"\nfunc main() {  }\n"
