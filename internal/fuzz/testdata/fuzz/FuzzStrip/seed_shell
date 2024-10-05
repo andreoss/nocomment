@@ -1,0 +1,3 @@
+go test fuzz v1
+string("shell")
+string("cat <<EOF\n# x\nEOF\n# c\n")
