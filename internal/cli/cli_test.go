@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io/fs"
+	"runtime"
 	"strings"
 	"testing"
 	"testing/iotest"
@@ -344,5 +345,40 @@ func TestOSFSMissingPath(t *testing.T) {
 	}
 	if err := fsys.WriteFile("nocomment-absent-dir/file", nil, 0o644); err == nil {
 		t.Fatal("WriteFile: expected error")
+	}
+}
+
+func TestParseVersion(t *testing.T) {
+	cfg, err := Parse([]string{"-version"})
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if !cfg.Version {
+		t.Fatal("version not set")
+	}
+}
+
+func TestVersionOutput(t *testing.T) {
+	var out, errBuf bytes.Buffer
+	status := Run(Config{Version: true}, strings.NewReader(""), &out, &errBuf, fakeProcessor{})
+	if status != 0 {
+		t.Fatalf("status = %d, stderr = %q", status, errBuf.String())
+	}
+	got := out.String()
+	if !strings.Contains(got, "nocomment") || !strings.Contains(got, runtime.Version()) {
+		t.Fatalf("out = %q", got)
+	}
+}
+
+func TestVersionString(t *testing.T) {
+	got := versionString()
+	if !strings.HasPrefix(got, "nocomment ") {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestHelpMentionsVersion(t *testing.T) {
+	if !strings.Contains(usageText, "-version") {
+		t.Fatal("usage missing -version")
 	}
 }

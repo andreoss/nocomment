@@ -5,6 +5,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"runtime"
+	"runtime/debug"
+	"strings"
 )
 
 const usageText = `usage: nocomment [flags] [path ...]
@@ -17,8 +20,11 @@ flags:
   -l           list files whose result differs
   -e           report all errors, not only the first
   -lang name   force the language for paths and standard input
+  -version     print version and build metadata
   -h, -help    show this help
 `
+
+var Version = "devel"
 
 type Config struct {
 	Write     bool
@@ -27,6 +33,7 @@ type Config struct {
 	AllErrors bool
 	Lang      string
 	Help      bool
+	Version   bool
 	Paths     []string
 }
 
@@ -45,6 +52,7 @@ func Parse(args []string) (Config, error) {
 	fs.StringVar(&cfg.Lang, "lang", "", "")
 	fs.BoolVar(&cfg.Help, "h", false, "")
 	fs.BoolVar(&cfg.Help, "help", false, "")
+	fs.BoolVar(&cfg.Version, "version", false, "")
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
 	}
@@ -59,6 +67,10 @@ func Run(cfg Config, stdin io.Reader, stdout, stderr io.Writer, processor Proces
 func runWith(cfg Config, stdin io.Reader, stdout, stderr io.Writer, processor Processor, files FileSystem) int {
 	if cfg.Help {
 		fmt.Fprint(stdout, usageText)
+		return 0
+	}
+	if cfg.Version {
+		fmt.Fprintln(stdout, versionString())
 		return 0
 	}
 	if cfg.Write && (cfg.Diff || cfg.List) {
@@ -167,4 +179,28 @@ func processFile(cfg Config, path string, stdout io.Writer, processor Processor,
 		_, err = stdout.Write(out)
 		return err
 	}
+}
+
+func versionString() string {
+	var b strings.Builder
+	b.WriteString("nocomment ")
+	b.WriteString(Version)
+	if info, ok := debug.ReadBuildInfo(); ok {
+		if v := info.Main.Version; v != "" && v != "(devel)" {
+			b.WriteString(" ")
+			b.WriteString(v)
+		}
+		for _, s := range info.Settings {
+			switch s.Key {
+			case "vcs.revision", "vcs.time":
+				if s.Value != "" {
+					b.WriteString(" ")
+					b.WriteString(s.Value)
+				}
+			}
+		}
+	}
+	b.WriteString(" ")
+	b.WriteString(runtime.Version())
+	return b.String()
 }
