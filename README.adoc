@@ -1,0 +1,68 @@
+= nocomment
+
+Removes comments from source code. The interface follows `go fmt`: the result
+goes to standard output, and flags rewrite, diff or list.
+
+Comment-like text inside string literals is kept. A line holding nothing but a
+comment is removed with its line ending; a line that still holds code keeps
+its line ending, so lines are never joined.
+
+== Build
+
+[source,sh]
+----
+make generate
+go build -o bin/nocomment ./cmd/nocomment
+----
+
+`make generate` fetches pinned ANTLR grammars and writes lexers under
+`internal/lexer/generated/`. They are build artifacts, not version controlled.
+
+== Usage
+
+[source,sh]
+----
+nocomment main.go           # print without comments
+nocomment -l src/           # list files that would change
+nocomment -d src/main.go    # unified diff
+nocomment -w src/main.go    # rewrite in place
+nocomment -lang go < main.go
+----
+
+A directory is walked recursively in lexicographic order; dot entries and
+`vendor`, `node_modules`, `bin`, `build`, `dist`, `target`, `scratch` and
+`_build` are skipped. Only known extensions are processed; a named file always
+is.
+
+[cols="1,3"]
+|===
+| `-w` | write the result to the source file
+| `-d` | display a unified diff
+| `-l` | list files whose result differs
+| `-e` | report all errors, not only the first
+| `-lang name` | force the language
+| `-s pattern` | process only names matching a comma-separated glob
+| `-version` | print version and build metadata
+| `-h`, `-help` | show usage
+|===
+
+`-w` cannot combine with `-d` or `-l`; `-d` cannot combine with `-l`. Exit code
+is 0 on success, 2 on a usage or processing error.
+
+== Languages
+
+ANTLR lexers: Go, Java, C, C++, Kotlin, PostgreSQL, SQLite, SQL, TOML, HTML,
+XML. Delimiter scanner: Python, C#, PHP, Swift, Ruby, Shell, JSONC, YAML,
+Markdown, JavaScript, TypeScript, Rust, Scala.
+
+Input must be valid UTF-8; a byte-order mark and a leading `#!` line are
+preserved. `-w` writes a temporary file in the target directory and renames it,
+keeping the file mode, and refuses a read-only file or a symbolic link.
+
+== Development
+
+[source,sh]
+----
+make generate && make corpus
+go test ./...
+----
