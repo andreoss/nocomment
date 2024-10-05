@@ -13,6 +13,8 @@ type Token struct {
 	Channel int
 	Line    int
 	Column  int
+	Start   int
+	Stop    int
 }
 
 func Tokenize(src []byte) ([]Token, error) {
@@ -31,6 +33,8 @@ func Tokenize(src []byte) ([]Token, error) {
 			Channel: tok.GetChannel(),
 			Line:    tok.GetLine(),
 			Column:  tok.GetColumn(),
+			Start:   tok.GetStart(),
+			Stop:    tok.GetStop(),
 		})
 	}
 	return tokens, nil
