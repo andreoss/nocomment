@@ -1,5 +1,7 @@
 package scan
 
+import "bytes"
+
 type StringRule struct {
 	Open      string
 	Close     string
@@ -15,11 +17,21 @@ type Syntax struct {
 	Nest           bool
 	LineBoundary   bool
 	Strings        []StringRule
+	Regex          bool
+	Percent        bool
+	HereDocs       string
+	YAMLBlock      bool
 }
 
 type Range struct {
 	Start int
 	Stop  int
+}
+
+var regexKeywords = map[string]bool{
+	"return": true, "typeof": true, "instanceof": true, "in": true,
+	"of": true, "new": true, "delete": true, "void": true, "case": true,
+	"do": true, "else": true, "yield": true, "await": true,
 }
 
 func Ranges(src []byte, s Syntax) []Range {
@@ -51,6 +63,10 @@ func Ranges(src []byte, s Syntax) []Range {
 			out = append(out, Range{Start: start, Stop: i})
 			continue
 		}
+		if s.Regex && src[i] == '/' && regexAllowed(src, i) {
+			i = scanRegex(src, i)
+			continue
+		}
 		if open, close, ok := matchBlock(src, i, s.BlockLineStart, true); ok {
 			start := i
 			i += len(open)
@@ -63,6 +79,30 @@ func Ranges(src []byte, s Syntax) []Range {
 			}
 			out = append(out, Range{Start: start, Stop: i})
 			continue
+		}
+		if s.Percent && src[i] == '%' {
+			if end, ok := scanPercent(src, i); ok {
+				i = end
+				continue
+			}
+		}
+		if s.HereDocs == "shell" && hasPrefix(src, i, "<<") {
+			if end, ok := scanHereDoc(src, i); ok {
+				i = end
+				continue
+			}
+		}
+		if s.HereDocs == "php" && hasPrefix(src, i, "<<<") {
+			if end, ok := scanPHPHereDoc(src, i); ok {
+				i = end
+				continue
+			}
+		}
+		if s.YAMLBlock && (src[i] == '|' || src[i] == '>') {
+			if end, ok := scanYAMLBlock(src, i); ok {
+				i = end
+				continue
+			}
 		}
 		if rule, ok := matchString(src, i, s.Strings); ok {
 			i = scanString(src, i, rule)
@@ -140,6 +180,270 @@ func scanString(src []byte, i int, rule StringRule) int {
 	return i
 }
 
+func regexAllowed(src []byte, i int) bool {
+	j := i - 1
+	for j >= 0 && isSpace(src[j]) {
+		j--
+	}
+	if j < 0 {
+		return true
+	}
+	switch src[j] {
+	case '(', ',', '=', ':', '[', '!', '&', '|', '?', '{', '}', ';', '+', '-', '*', '%', '<', '>', '^', '~':
+		return true
+	}
+	if isWordByte(src[j]) {
+		start := j
+		for start >= 0 && isWordByte(src[start]) {
+			start--
+		}
+		return regexKeywords[string(src[start+1:j+1])]
+	}
+	return false
+}
+
+func scanRegex(src []byte, i int) int {
+	i++
+	inClass := false
+	for i < len(src) {
+		c := src[i]
+		if c == '\\' {
+			i += 2
+			continue
+		}
+		if c == '\n' || c == '\r' {
+			return i
+		}
+		if c == '[' {
+			inClass = true
+		}
+		if c == ']' {
+			inClass = false
+		}
+		if c == '/' && !inClass {
+			return i + 1
+		}
+		i++
+	}
+	return i
+}
+
+func scanPercent(src []byte, i int) (int, bool) {
+	j := i + 1
+	if j < len(src) && isPercentType(src[j]) {
+		j++
+	}
+	if j >= len(src) {
+		return i, false
+	}
+	open := src[j]
+	if isAlnum(open) || isSpace(open) {
+		return i, false
+	}
+	close := matchingDelim(open)
+	nest := close != open
+	depth := 1
+	j++
+	for j < len(src) {
+		if src[j] == '\\' {
+			j += 2
+			continue
+		}
+		if nest && src[j] == open {
+			depth++
+			j++
+			continue
+		}
+		if src[j] == close {
+			depth--
+			if depth == 0 {
+				return j + 1, true
+			}
+		}
+		j++
+	}
+	return j, true
+}
+
+func scanHereDoc(src []byte, i int) (int, bool) {
+	if i > 0 && !isSpace(src[i-1]) && src[i-1] != ';' && src[i-1] != '&' && src[i-1] != '|' {
+		return i, false
+	}
+	j := i + 2
+	dash := false
+	if j < len(src) && src[j] == '-' {
+		dash = true
+		j++
+	}
+	if j < len(src) && src[j] == '<' {
+		return i, false
+	}
+	for j < len(src) && (src[j] == ' ' || src[j] == '\t') {
+		j++
+	}
+	quote := byte(0)
+	if j < len(src) && (src[j] == '\'' || src[j] == '"') {
+		quote = src[j]
+		j++
+	}
+	start := j
+	for j < len(src) && isWordByte(src[j]) {
+		j++
+	}
+	if j == start {
+		return i, false
+	}
+	if !isAlphaByte(src[start]) && src[start] != '_' {
+		return i, false
+	}
+	delim := string(src[start:j])
+	if quote != 0 && j < len(src) && src[j] == quote {
+		j++
+	}
+	for j < len(src) && src[j] != '\n' {
+		j++
+	}
+	if j < len(src) {
+		j++
+	}
+	for j <= len(src) {
+		lineEnd := j
+		for lineEnd < len(src) && src[lineEnd] != '\n' {
+			lineEnd++
+		}
+		line := src[j:lineEnd]
+		if dash {
+			line = bytes.TrimLeft(line, "\t")
+		}
+		if string(line) == delim {
+			if lineEnd < len(src) {
+				return lineEnd + 1, true
+			}
+			return lineEnd, true
+		}
+		if lineEnd >= len(src) {
+			break
+		}
+		j = lineEnd + 1
+	}
+	return len(src), true
+}
+
+func scanPHPHereDoc(src []byte, i int) (int, bool) {
+	j := i + 3
+	for j < len(src) && (src[j] == ' ' || src[j] == '\t') {
+		j++
+	}
+	quote := byte(0)
+	if j < len(src) && (src[j] == '\'' || src[j] == '"') {
+		quote = src[j]
+		j++
+	}
+	start := j
+	for j < len(src) && isWordByte(src[j]) {
+		j++
+	}
+	if j == start {
+		return i, false
+	}
+	delim := string(src[start:j])
+	if quote != 0 && j < len(src) && src[j] == quote {
+		j++
+	}
+	for j < len(src) && src[j] != '\n' {
+		j++
+	}
+	if j < len(src) {
+		j++
+	}
+	for j <= len(src) {
+		lineEnd := j
+		for lineEnd < len(src) && src[lineEnd] != '\n' {
+			lineEnd++
+		}
+		line := bytes.TrimLeft(src[j:lineEnd], " \t")
+		if bytes.HasPrefix(line, []byte(delim)) {
+			rest := line[len(delim):]
+			if len(rest) == 0 || (len(rest) == 1 && rest[0] == ';') {
+				if lineEnd < len(src) {
+					return lineEnd + 1, true
+				}
+				return lineEnd, true
+			}
+		}
+		if lineEnd >= len(src) {
+			break
+		}
+		j = lineEnd + 1
+	}
+	return len(src), true
+}
+
+func scanYAMLBlock(src []byte, i int) (int, bool) {
+	j := i + 1
+	for j < len(src) && (src[j] == '+' || src[j] == '-' || (src[j] >= '0' && src[j] <= '9')) {
+		j++
+	}
+	for j < len(src) && (src[j] == ' ' || src[j] == '\t') {
+		j++
+	}
+	if j < len(src) && src[j] != '\n' && src[j] != '\r' {
+		return i, false
+	}
+	lineStart := i
+	for lineStart > 0 && src[lineStart-1] != '\n' {
+		lineStart--
+	}
+	indent := 0
+	for k := lineStart; k < i; k++ {
+		if src[k] == ' ' {
+			indent++
+		} else if src[k] == '\t' {
+			indent += 8
+		} else {
+			break
+		}
+	}
+	if j < len(src) && src[j] == '\r' {
+		j++
+	}
+	if j < len(src) && src[j] == '\n' {
+		j++
+	}
+	for j < len(src) {
+		lineEnd := j
+		for lineEnd < len(src) && src[lineEnd] != '\n' {
+			lineEnd++
+		}
+		line := src[j:lineEnd]
+		if len(bytes.TrimSpace(line)) == 0 {
+			if lineEnd < len(src) {
+				j = lineEnd + 1
+				continue
+			}
+			return lineEnd, true
+		}
+		ind := 0
+		for k := j; k < lineEnd; k++ {
+			if src[k] == ' ' {
+				ind++
+			} else if src[k] == '\t' {
+				ind += 8
+			} else {
+				break
+			}
+		}
+		if ind <= indent {
+			return j, true
+		}
+		if lineEnd >= len(src) {
+			return lineEnd, true
+		}
+		j = lineEnd + 1
+	}
+	return j, true
+}
+
 func hasPrefix(src []byte, i int, prefix string) bool {
 	if i < 0 || i+len(prefix) > len(src) {
 		return false
@@ -165,4 +469,42 @@ func atBoundary(src []byte, i int) bool {
 		return true
 	}
 	return false
+}
+
+func isPercentType(c byte) bool {
+	switch c {
+	case 'q', 'Q', 'w', 'W', 'i', 'I', 'r', 's', 'x':
+		return true
+	}
+	return false
+}
+
+func matchingDelim(open byte) byte {
+	switch open {
+	case '(':
+		return ')'
+	case '[':
+		return ']'
+	case '{':
+		return '}'
+	case '<':
+		return '>'
+	}
+	return open
+}
+
+func isSpace(c byte) bool {
+	return c == ' ' || c == '\t' || c == '\n' || c == '\r'
+}
+
+func isAlphaByte(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+}
+
+func isAlnum(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+}
+
+func isWordByte(c byte) bool {
+	return isAlnum(c) || c == '_' || c == '$'
 }

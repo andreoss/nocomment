@@ -166,6 +166,36 @@ func Cases() []Case {
 			Expected: "val s = 1 \nval t = 2\n",
 		},
 		{
+			Language: "javascript",
+			ID:       "ID-50",
+			Input:    "const re = /a\\/\\//; // drop\n",
+			Expected: "const re = /a\\/\\//; \n",
+		},
+		{
+			Language: "ruby",
+			ID:       "ID-51",
+			Input:    "s = %q{# not a comment}\n# drop\n",
+			Expected: "s = %q{# not a comment}\n\n",
+		},
+		{
+			Language: "shell",
+			ID:       "ID-52",
+			Input:    "cat <<EOF\n# not a comment\nEOF\n# drop\n",
+			Expected: "cat <<EOF\n# not a comment\nEOF\n\n",
+		},
+		{
+			Language: "php",
+			ID:       "ID-53",
+			Input:    "<?php\n$s = <<<EOT\n# not a comment\nEOT;\n# drop\n",
+			Expected: "<?php\n$s = <<<EOT\n# not a comment\nEOT;\n\n",
+		},
+		{
+			Language: "yaml",
+			ID:       "ID-54",
+			Input:    "key: |\n  # not a comment\n# drop\n",
+			Expected: "key: |\n  # not a comment\n\n",
+		},
+		{
 			Language: "markdown",
 			ID:       "ID-28",
 			Input:    "<!-- remove me -->\ntext\n",

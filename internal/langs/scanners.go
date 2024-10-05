@@ -45,8 +45,9 @@ func registerScanners(r *lang.Registry) {
 	}), []string{"COMMENT"}))
 
 	r.Register(lang.NewGeneric("php", []string{".php"}, scannerTokens(scan.Syntax{
-		Line:  []string{"//", "#"},
-		Block: [][2]string{{"/*", "*/"}},
+		Line:     []string{"//", "#"},
+		Block:    [][2]string{{"/*", "*/"}},
+		HereDocs: "php",
 		Strings: []scan.StringRule{
 			{Open: `"`, Close: `"`, Escape: true},
 			{Open: `'`, Close: `'`, Escape: true},
@@ -67,6 +68,7 @@ func registerScanners(r *lang.Registry) {
 	r.Register(lang.NewGeneric("ruby", []string{".rb"}, scannerTokens(scan.Syntax{
 		Line:           []string{"#"},
 		BlockLineStart: [][2]string{{"=begin", "=end"}},
+		Percent:        true,
 		Strings: []scan.StringRule{
 			{Open: `"`, Close: `"`, Escape: true},
 			{Open: `'`, Close: `'`, Escape: true},
@@ -76,6 +78,7 @@ func registerScanners(r *lang.Registry) {
 	r.Register(lang.NewGeneric("shell", []string{".sh", ".bash"}, scannerTokens(scan.Syntax{
 		Line:         []string{"#"},
 		LineBoundary: true,
+		HereDocs:     "shell",
 		Strings: []scan.StringRule{
 			{Open: `"`, Close: `"`, Escape: true},
 			{Open: `'`, Close: `'`},
@@ -94,6 +97,7 @@ func registerScanners(r *lang.Registry) {
 	r.Register(lang.NewGeneric("yaml", []string{".yaml", ".yml"}, scannerTokens(scan.Syntax{
 		Line:         []string{"#"},
 		LineBoundary: true,
+		YAMLBlock:    true,
 		Strings: []scan.StringRule{
 			{Open: `"`, Close: `"`, Escape: true},
 			{Open: `'`, Close: `'`, Doubled: true},
@@ -107,6 +111,7 @@ func registerScanners(r *lang.Registry) {
 	r.Register(lang.NewGeneric("javascript", []string{".js", ".mjs", ".cjs"}, scannerTokens(scan.Syntax{
 		Line:  []string{"//"},
 		Block: [][2]string{{"/*", "*/"}},
+		Regex: true,
 		Strings: []scan.StringRule{
 			{Open: "`", Close: "`", Escape: true, Multiline: true},
 			{Open: `"`, Close: `"`, Escape: true},
@@ -117,6 +122,7 @@ func registerScanners(r *lang.Registry) {
 	r.Register(lang.NewGeneric("typescript", []string{".ts", ".tsx"}, scannerTokens(scan.Syntax{
 		Line:  []string{"//"},
 		Block: [][2]string{{"/*", "*/"}},
+		Regex: true,
 		Strings: []scan.StringRule{
 			{Open: "`", Close: "`", Escape: true, Multiline: true},
 			{Open: `"`, Close: `"`, Escape: true},
