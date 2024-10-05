@@ -3,6 +3,7 @@
 /tools/*.jar
 /grammars/*/
 /internal/lexer/generated/
+/internal/conformance/testdata/files/
 /doc/Confidential.adoc
 coverage.out
 *.test

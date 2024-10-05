@@ -1,7 +1,7 @@
 GO ?= go
 ANTLR_VERSION ?= 4.13.2
 
-.PHONY: all generate fetch build test clean
+.PHONY: all generate fetch build test corpus clean
 
 all: generate build
 
@@ -17,5 +17,8 @@ build: generate
 test: generate
 	$(GO) test ./...
 
+corpus:
+	./scripts/fetch-corpus.sh
+
 clean:
-	rm -rf internal/lexer/generated tools grammars/golang bin scratch
+	rm -rf internal/lexer/generated internal/conformance/testdata/files tools grammars/golang bin scratch
