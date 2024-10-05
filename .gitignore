@@ -1,0 +1,8 @@
+/bin/
+/scratch/
+/tools/*.jar
+/grammars/golang/
+/internal/lexer/generated/
+/doc/Confidential.adoc
+coverage.out
+*.test
