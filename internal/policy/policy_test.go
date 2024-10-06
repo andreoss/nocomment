@@ -1,0 +1,119 @@
+package policy
+
+import (
+	"bytes"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+const script = "scripts/commit-policy.sh"
+
+func root(t *testing.T) string {
+	t.Helper()
+	abs, err := filepath.Abs("../..")
+	if err != nil {
+		t.Fatalf("abs: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(abs, script)); err != nil {
+		t.Fatalf("stat %s: %v", script, err)
+	}
+	return abs
+}
+
+func run(t *testing.T, stdin string, args ...string) (string, bool) {
+	t.Helper()
+	cmd := exec.Command("sh", append([]string{script}, args...)...)
+	cmd.Dir = root(t)
+	cmd.Stdin = strings.NewReader(stdin)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	err := cmd.Run()
+	return out.String(), err == nil
+}
+
+func TestMessageMode(t *testing.T) {
+	cases := []struct {
+		message string
+		ok      bool
+	}{
+		{"ID-91 add commit policy check", true},
+		{"ID-91", true},
+		{"ID-91 add check\n\nbody text\n", true},
+		{"ID-91 and ID-92 in one commit", false},
+		{"add commit policy check", false},
+		{"ID-40..ID-93 plan the audit gaps", false},
+		{"id-91 lowercase id", false},
+		{"ID-91 add check\n\nalso ID-92\n", false},
+		{"", false},
+	}
+	for _, c := range cases {
+		out, ok := run(t, c.message, "-")
+		if ok != c.ok {
+			t.Fatalf("message %q: ok = %v, want %v (%s)", c.message, ok, c.ok, out)
+		}
+	}
+}
+
+func TestRangeModeAcceptsCompliantHistory(t *testing.T) {
+	out, ok := run(t, "", "af7d31276667dfd970ef7dd50aa15870ea9f530f..HEAD")
+	if !ok {
+		t.Fatalf("compliant range rejected: %s", out)
+	}
+}
+
+func TestRangeModeRejectsLegacyCommits(t *testing.T) {
+	out, ok := run(t, "", "d5f8a3559d32bcb66686dd4c9288c5329a325e9a..HEAD")
+	if ok {
+		t.Fatalf("legacy range accepted: %s", out)
+	}
+	if !strings.Contains(out, "a6f0636") {
+		t.Fatalf("offending commit not named: %s", out)
+	}
+}
+
+func TestDefaultRangeIsBaselineToHead(t *testing.T) {
+	out, ok := run(t, "")
+	if !ok {
+		t.Fatalf("default range rejected: %s", out)
+	}
+}
+
+func TestHookDelegatesToTheCheck(t *testing.T) {
+	dir := filepath.Join(root(t), "scratch")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	path := filepath.Join(dir, "commit-msg-fixture")
+	if err := os.WriteFile(path, []byte("two ids ID-91 ID-92\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	t.Cleanup(func() { os.Remove(path) })
+	cmd := exec.Command("sh", "scripts/hooks/commit-msg", path)
+	cmd.Dir = root(t)
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("hook accepted two ids: %s", out)
+	}
+}
+
+func TestRangeModeWalksEveryCommit(t *testing.T) {
+	rev := exec.Command("git", "rev-list", "--count",
+		"af7d31276667dfd970ef7dd50aa15870ea9f530f..HEAD")
+	rev.Dir = root(t)
+	want, err := rev.Output()
+	if err != nil {
+		t.Fatalf("rev-list: %v", err)
+	}
+	out, ok := run(t, "", "af7d31276667dfd970ef7dd50aa15870ea9f530f..HEAD")
+	if !ok {
+		t.Fatalf("compliant range rejected: %s", out)
+	}
+	n := strings.TrimSpace(string(want))
+	if !strings.Contains(out, n+" commits") {
+		t.Fatalf("reported count is not %s: %s", n, out)
+	}
+}

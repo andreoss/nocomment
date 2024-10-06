@@ -1,7 +1,7 @@
 GO ?= go
 ANTLR_VERSION ?= 4.13.2
 
-.PHONY: all generate fetch build test corpus bench cover cover-gate vet release repro clean
+.PHONY: all generate fetch build test corpus bench cover cover-gate vet policy hooks release repro clean
 
 all: generate build
 
@@ -31,6 +31,12 @@ cover-gate: generate
 
 vet: generate
 	$(GO) vet ./...
+
+policy:
+	./scripts/commit-policy.sh
+
+hooks:
+	git config core.hooksPath scripts/hooks
 
 release: generate
 	./scripts/release.sh
