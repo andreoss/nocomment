@@ -1,7 +1,7 @@
 GO ?= go
 ANTLR_VERSION ?= 4.13.2
 
-.PHONY: all generate fetch build test corpus bench cover cover-gate vet policy audit hooks release repro clean
+.PHONY: all generate fetch build test corpus bench cover cover-gate vet policy audit platform hooks release repro clean
 
 all: generate build
 
@@ -34,6 +34,9 @@ vet: generate
 
 policy:
 	./scripts/commit-policy.sh
+
+platform:
+	./scripts/platform-run.sh
 
 audit:
 	./scripts/evidence-audit.sh
