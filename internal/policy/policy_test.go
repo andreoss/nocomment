@@ -117,3 +117,40 @@ func TestRangeModeWalksEveryCommit(t *testing.T) {
 		t.Fatalf("reported count is not %s: %s", n, out)
 	}
 }
+
+const audit = "scripts/evidence-audit.sh"
+
+func runAudit(t *testing.T, args ...string) (string, bool) {
+	t.Helper()
+	cmd := exec.Command("sh", append([]string{audit}, args...)...)
+	cmd.Dir = root(t)
+	out, err := cmd.CombinedOutput()
+	return string(out), err == nil
+}
+
+func TestEvidenceAuditAcceptsTheTracker(t *testing.T) {
+	out, ok := runAudit(t)
+	if !ok {
+		t.Fatalf("tracker rejected: %s", out)
+	}
+}
+
+func TestEvidenceAuditRejectsAnIdWithoutReview(t *testing.T) {
+	dir := filepath.Join(root(t), "scratch")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	path := filepath.Join(dir, "tracker-fixture.adoc")
+	body := "| Id | M | Status | Id | M | Status\n\n| ID-99 | M10 | x | ID-98 | M10 | -\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	t.Cleanup(func() { os.Remove(path) })
+	out, ok := runAudit(t, "scratch/tracker-fixture.adoc")
+	if ok {
+		t.Fatalf("unreviewed id accepted: %s", out)
+	}
+	if !strings.Contains(out, "ID-99") {
+		t.Fatalf("offending id not named: %s", out)
+	}
+}
