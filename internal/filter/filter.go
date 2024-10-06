@@ -40,13 +40,12 @@ func RemoveComments(src []byte, tokens []lexer.Token, isComment func(string) boo
 	out := make([]byte, 0, len(src))
 	for start := 0; start < len(src); {
 		body, next := splitLine(src, start)
-		keptBody := keep(src, mask, start, body)
-		if anyMasked(mask, start, body) && blank(keptBody) && !anyMasked(mask, body, next) {
+		if anyMasked(mask, start, body) && keptIsBlank(src, mask, start, body) &&
+			!anyMasked(mask, body, next) {
 			start = next
 			continue
 		}
-		out = append(out, keptBody...)
-		out = append(out, keep(src, mask, body, next)...)
+		out = appendKept(out, src, mask, start, next)
 		start = next
 	}
 	return out
@@ -89,14 +88,13 @@ func splitLine(src []byte, start int) (body, next int) {
 	return body, i
 }
 
-func keep(src []byte, mask []bool, from, to int) []byte {
-	out := make([]byte, 0, to-from)
+func appendKept(dst, src []byte, mask []bool, from, to int) []byte {
 	for i := from; i < to; i++ {
 		if !mask[i] {
-			out = append(out, src[i])
+			dst = append(dst, src[i])
 		}
 	}
-	return out
+	return dst
 }
 
 func anyMasked(mask []bool, from, to int) bool {
@@ -108,8 +106,12 @@ func anyMasked(mask []bool, from, to int) bool {
 	return false
 }
 
-func blank(body []byte) bool {
-	for _, b := range body {
+func keptIsBlank(src []byte, mask []bool, from, to int) bool {
+	for i := from; i < to; i++ {
+		if mask[i] {
+			continue
+		}
+		b := src[i]
 		if b != ' ' && b != '\t' && b != '\r' && b != '\v' && b != '\f' {
 			return false
 		}
