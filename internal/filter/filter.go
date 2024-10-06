@@ -36,13 +36,26 @@ func ShebangEnd(src []byte) int {
 }
 
 func RemoveComments(src []byte, tokens []lexer.Token, isComment func(string) bool) []byte {
+	mask := commentMask(src, tokens, isComment)
 	out := make([]byte, 0, len(src))
-	last := 0
-	for _, t := range tokens {
-		if !isComment(t.Name) {
+	for start := 0; start < len(src); {
+		body, next := splitLine(src, start)
+		keptBody := keep(src, mask, start, body)
+		if anyMasked(mask, start, body) && blank(keptBody) && !anyMasked(mask, body, next) {
+			start = next
 			continue
 		}
-		if t.Start > len(src) {
+		out = append(out, keptBody...)
+		out = append(out, keep(src, mask, body, next)...)
+		start = next
+	}
+	return out
+}
+
+func commentMask(src []byte, tokens []lexer.Token, isComment func(string) bool) []bool {
+	mask := make([]bool, len(src))
+	for _, t := range tokens {
+		if !isComment(t.Name) || t.Start > len(src) {
 			continue
 		}
 		end := t.Stop + 1
@@ -52,19 +65,54 @@ func RemoveComments(src []byte, tokens []lexer.Token, isComment func(string) boo
 		for end > t.Start && (src[end-1] == '\n' || src[end-1] == '\r') {
 			end--
 		}
-		if t.Start < last {
-			if end > last {
-				last = end
+		for i := t.Start; i < end; i++ {
+			if i >= 0 && i < len(mask) {
+				mask[i] = true
 			}
-			continue
-		}
-		out = append(out, src[last:t.Start]...)
-		if end > last {
-			last = end
 		}
 	}
-	if last < len(src) {
-		out = append(out, src[last:]...)
+	return mask
+}
+
+func splitLine(src []byte, start int) (body, next int) {
+	i := start
+	for i < len(src) && src[i] != '\n' {
+		i++
+	}
+	body = i
+	if body > start && src[body-1] == '\r' {
+		body--
+	}
+	if i < len(src) {
+		return body, i + 1
+	}
+	return body, i
+}
+
+func keep(src []byte, mask []bool, from, to int) []byte {
+	out := make([]byte, 0, to-from)
+	for i := from; i < to; i++ {
+		if !mask[i] {
+			out = append(out, src[i])
+		}
 	}
 	return out
+}
+
+func anyMasked(mask []bool, from, to int) bool {
+	for i := from; i < to; i++ {
+		if mask[i] {
+			return true
+		}
+	}
+	return false
+}
+
+func blank(body []byte) bool {
+	for _, b := range body {
+		if b != ' ' && b != '\t' && b != '\r' && b != '\v' && b != '\f' {
+			return false
+		}
+	}
+	return true
 }

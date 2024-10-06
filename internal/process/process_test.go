@@ -27,7 +27,7 @@ func TestProcessForcedLanguage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Process: %v", err)
 	}
-	if string(got) != "\n" {
+	if string(got) != "" {
 		t.Fatalf("got %q", got)
 	}
 }

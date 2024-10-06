@@ -53,11 +53,20 @@ func TestRemoveCommentsEmpty(t *testing.T) {
 	}
 }
 
-func TestRemoveCommentsKeepsTrailingNewline(t *testing.T) {
+func TestRemoveCommentsDropsAWholeCommentLine(t *testing.T) {
 	src := []byte("-- c\nx\n")
 	tokens := []lexer.Token{{Name: "LINE_COMMENT", Start: 0, Stop: 4}}
 	got := RemoveComments(src, tokens, func(n string) bool { return n == "LINE_COMMENT" })
-	if string(got) != "\nx\n" {
+	if string(got) != "x\n" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestRemoveCommentsKeepsALineThatHoldsCode(t *testing.T) {
+	src := []byte("x -- c\ny\n")
+	tokens := []lexer.Token{{Name: "LINE_COMMENT", Start: 2, Stop: 6}}
+	got := RemoveComments(src, tokens, func(n string) bool { return n == "LINE_COMMENT" })
+	if string(got) != "x \ny\n" {
 		t.Fatalf("got %q", got)
 	}
 }
@@ -71,14 +80,14 @@ func TestStripPreservesShebang(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Strip: %v", err)
 	}
-	if string(got) != "#!/usr/bin/env python3\n\nx = 1\n" {
+	if string(got) != "#!/usr/bin/env python3\nx = 1\n" {
 		t.Fatalf("got %q", got)
 	}
 }
 
 func TestStripGo(t *testing.T) {
 	src := []byte("package main\n\n// remove me\nvar s = \"// keep\"\nfunc main() { /* drop */ }\n")
-	want := "package main\n\n\nvar s = \"// keep\"\nfunc main() {  }\n"
+	want := "package main\n\nvar s = \"// keep\"\nfunc main() {  }\n"
 	goLang, ok := langs.Default().ByName("go")
 	if !ok {
 		t.Fatal("go not registered")
