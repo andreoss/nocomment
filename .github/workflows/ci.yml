@@ -37,8 +37,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: windows-latest
-            name: windows-amd64
           - os: ubuntu-24.04-arm
             name: linux-arm64
     runs-on: ${{ matrix.os }}
@@ -60,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        goos: [linux, darwin, windows]
+        goos: [linux, darwin]
         goarch: [amd64, arm64]
     steps:
       - uses: actions/checkout@v4
