@@ -2,11 +2,13 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
 )
 
 func realDir(t *testing.T) string {
@@ -162,3 +164,55 @@ func TestRealDirectoryWalkWithSelect(t *testing.T) {
 		t.Fatalf("listed %v", listed)
 	}
 }
+
+func TestRealInvalidUTF8NamesTheFile(t *testing.T) {
+	dir := realDir(t)
+	path := filepath.Join(dir, "bad.go")
+	if err := os.WriteFile(path, []byte{'p', 'k', 0xff, 0xfe, '\n'}, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	var out, errBuf bytes.Buffer
+	processor := failingProcessor{}
+	status := Run(Config{Paths: []string{path}}, strings.NewReader(""), &out, &errBuf, processor)
+	if status != 2 {
+		t.Fatalf("status = %d", status)
+	}
+	got := errBuf.String()
+	if !strings.Contains(got, path) {
+		t.Fatalf("error does not name the file: %q", got)
+	}
+	if !strings.Contains(got, "not valid UTF-8") {
+		t.Fatalf("error does not state the reason: %q", got)
+	}
+}
+
+func TestRealEveryBadFileIsNamed(t *testing.T) {
+	dir := realDir(t)
+	for _, name := range []string{"one.go", "two.go"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte{0xff, 0xfe}, 0o644); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+	var out, errBuf bytes.Buffer
+	cfg := Config{AllErrors: true, Paths: []string{dir}}
+	if status := Run(cfg, strings.NewReader(""), &out, &errBuf, failingProcessor{}); status != 2 {
+		t.Fatalf("status = %d", status)
+	}
+	got := errBuf.String()
+	for _, name := range []string{"one.go", "two.go"} {
+		if !strings.Contains(got, name) {
+			t.Fatalf("%s not named: %q", name, got)
+		}
+	}
+}
+
+type failingProcessor struct{}
+
+func (failingProcessor) Process(path string, src []byte) ([]byte, error) {
+	if !utf8.Valid(src) {
+		return nil, errors.New("input is not valid UTF-8")
+	}
+	return src, nil
+}
+
+func (failingProcessor) Supports(path string) bool { return filepath.Ext(path) == ".go" }

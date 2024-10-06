@@ -42,5 +42,5 @@ func (p Processor) lookup(path string) (lang.Language, error) {
 	if l, ok := p.Registry.ByExtension(path); ok {
 		return l, nil
 	}
-	return nil, errors.New("unsupported file: " + path)
+	return nil, errors.New("unsupported extension")
 }

@@ -184,7 +184,7 @@ func processFile(cfg Config, path string, stdout io.Writer, processor Processor,
 	}
 	out, err := processor.Process(path, src)
 	if err != nil {
-		return err
+		return fmt.Errorf("%s: %w", path, err)
 	}
 	changed := !bytes.Equal(src, out)
 	switch {
