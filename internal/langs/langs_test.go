@@ -1,6 +1,10 @@
 package langs
 
-import "testing"
+import (
+	"testing"
+
+	"nocomment/internal/lang"
+)
 
 func TestDefault(t *testing.T) {
 	r := Default()
@@ -74,6 +78,27 @@ func TestExtensions(t *testing.T) {
 		}
 		if l.Name() != want {
 			t.Fatalf("%s -> %s, want %s", ext, l.Name(), want)
+		}
+	}
+}
+
+func TestGoIsGeneric(t *testing.T) {
+	l, ok := Default().ByName("go")
+	if !ok {
+		t.Fatal("go not registered")
+	}
+	g, ok := l.(lang.Generic)
+	if !ok {
+		t.Fatalf("go is %T, want lang.Generic", l)
+	}
+	for _, name := range []string{"COMMENT", "LINE_COMMENT", "COMMENT_NLSEMI", "LINE_COMMENT_NLSEMI"} {
+		if !g.IsComment(name) {
+			t.Fatalf("IsComment(%q) = false", name)
+		}
+	}
+	for _, name := range []string{"IDENTIFIER", "WS", "COMMENTARY"} {
+		if g.IsComment(name) {
+			t.Fatalf("IsComment(%q) = true", name)
 		}
 	}
 }

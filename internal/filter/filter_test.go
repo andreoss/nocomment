@@ -3,7 +3,6 @@ package filter
 import (
 	"testing"
 
-	"nocomment/internal/lang/golang"
 	"nocomment/internal/langs"
 	"nocomment/internal/lexer"
 )
@@ -80,7 +79,11 @@ func TestStripPreservesShebang(t *testing.T) {
 func TestStripGo(t *testing.T) {
 	src := []byte("package main\n\n// remove me\nvar s = \"// keep\"\nfunc main() { /* drop */ }\n")
 	want := "package main\n\n\nvar s = \"// keep\"\nfunc main() {  }\n"
-	got, err := Strip(golang.New(), src)
+	goLang, ok := langs.Default().ByName("go")
+	if !ok {
+		t.Fatal("go not registered")
+	}
+	got, err := Strip(goLang, src)
 	if err != nil {
 		t.Fatalf("Strip: %v", err)
 	}

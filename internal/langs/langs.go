@@ -4,9 +4,9 @@ import (
 	antlr4 "github.com/antlr4-go/antlr/v4"
 
 	"nocomment/internal/lang"
-	"nocomment/internal/lang/golang"
 	"nocomment/internal/lexer"
 	"nocomment/internal/lexer/generated/cpp"
+	"nocomment/internal/lexer/generated/golang"
 	"nocomment/internal/lexer/generated/html"
 	"nocomment/internal/lexer/generated/java"
 	"nocomment/internal/lexer/generated/kotlin"
@@ -17,7 +17,8 @@ import (
 
 func Default() *lang.Registry {
 	r := lang.NewRegistry()
-	r.Register(golang.New())
+	r.Register(lang.NewGeneric("go", []string{".go"}, goTokens,
+		[]string{"COMMENT", "LINE_COMMENT", "COMMENT_NLSEMI", "LINE_COMMENT_NLSEMI"}))
 	r.Register(lang.NewGeneric("java", []string{".java"}, javaTokens,
 		[]string{"COMMENT", "LINE_COMMENT"}))
 	r.Register(lang.NewGeneric("c", []string{".c", ".h"}, cppTokens,
@@ -40,6 +41,11 @@ func Default() *lang.Registry {
 		[]string{"BlockComment", "LineComment", "UnterminatedBlockComment"}))
 	registerScanners(r)
 	return r
+}
+
+func goTokens(src []byte) ([]lexer.Token, error) {
+	l := golang.NewGoLexer(antlr4.NewInputStream(string(src)))
+	return lexer.Collect(src, l.NextToken, l.SymbolicNames), nil
 }
 
 func javaTokens(src []byte) ([]lexer.Token, error) {

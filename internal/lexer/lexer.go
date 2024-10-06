@@ -4,8 +4,6 @@ import (
 	"unicode/utf8"
 
 	antlr4 "github.com/antlr4-go/antlr/v4"
-
-	"nocomment/internal/lexer/generated/golang"
 )
 
 type Token struct {
@@ -17,11 +15,6 @@ type Token struct {
 	Column  int
 	Start   int
 	Stop    int
-}
-
-func Tokenize(src []byte) ([]Token, error) {
-	lex := golang.NewGoLexer(antlr4.NewInputStream(string(src)))
-	return Collect(src, lex.NextToken, lex.SymbolicNames), nil
 }
 
 func Collect(src []byte, next func() antlr4.Token, names []string) []Token {

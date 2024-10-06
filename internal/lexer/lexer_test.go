@@ -3,7 +3,16 @@ package lexer
 import (
 	"strings"
 	"testing"
+
+	antlr4 "github.com/antlr4-go/antlr/v4"
+
+	"nocomment/internal/lexer/generated/golang"
 )
+
+func tokenize(src []byte) ([]Token, error) {
+	lex := golang.NewGoLexer(antlr4.NewInputStream(string(src)))
+	return Collect(src, lex.NextToken, lex.SymbolicNames), nil
+}
 
 var commentNames = map[string]bool{
 	"LINE_COMMENT":        true,
@@ -21,7 +30,7 @@ func testText(src []byte, tok Token) string {
 
 func TestTokenizeSeparatesCommentsAndStrings(t *testing.T) {
 	src := []byte("package main\n// first\nvar s = \"// not a comment\"\n/* block */\nvar t = `/* raw */`\n")
-	tokens, err := Tokenize(src)
+	tokens, err := tokenize(src)
 	if err != nil {
 		t.Fatalf("Tokenize: %v", err)
 	}
@@ -61,7 +70,7 @@ func TestTokenizeSeparatesCommentsAndStrings(t *testing.T) {
 
 func TestTokenizeByteOffsetsWithMultibyte(t *testing.T) {
 	src := []byte("package main\n// \u201cx\u201d\nvar s = 1\n")
-	tokens, err := Tokenize(src)
+	tokens, err := tokenize(src)
 	if err != nil {
 		t.Fatalf("Tokenize: %v", err)
 	}
@@ -81,7 +90,7 @@ func TestTokenizeByteOffsetsWithMultibyte(t *testing.T) {
 
 func TestTokenizePositions(t *testing.T) {
 	src := []byte("package main // c\n")
-	tokens, err := Tokenize(src)
+	tokens, err := tokenize(src)
 	if err != nil {
 		t.Fatalf("Tokenize: %v", err)
 	}
