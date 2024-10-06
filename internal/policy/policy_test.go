@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -151,6 +152,47 @@ func TestEvidenceAuditRejectsAnIdWithoutReview(t *testing.T) {
 		t.Fatalf("unreviewed id accepted: %s", out)
 	}
 	if !strings.Contains(out, "ID-99") {
+		t.Fatalf("offending id not named: %s", out)
+	}
+}
+
+func TestEvidenceAuditRequiresAReviewPerSprint(t *testing.T) {
+	out, ok := runAudit(t)
+	if !ok {
+		t.Fatalf("audit rejected the tracker: %s", out)
+	}
+	sprints, err := os.ReadFile(filepath.Join(root(t), "doc/Sprints.adoc"))
+	if err != nil {
+		t.Fatalf("read sprints: %v", err)
+	}
+	declared := regexp.MustCompile(`(?m)^== (S[0-9]+)`).FindAllStringSubmatch(string(sprints), -1)
+	if len(declared) == 0 {
+		t.Fatal("no sprint declared")
+	}
+	for _, m := range declared {
+		path := filepath.Join(root(t), "doc/review", m[1]+".adoc")
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("%s has no review: %v", m[1], err)
+		}
+	}
+}
+
+func TestEvidenceAuditRejectsADoneReviewOfABlockedId(t *testing.T) {
+	dir := filepath.Join(root(t), "scratch")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	path := filepath.Join(dir, "tracker-blocked.adoc")
+	body := "| Id | M | Status | Id | M | Status\n\n| ID-01 | M0 | ! | ID-02 | M0 | x\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	t.Cleanup(func() { os.Remove(path) })
+	out, ok := runAudit(t, "scratch/tracker-blocked.adoc")
+	if ok {
+		t.Fatalf("done review of a blocked id accepted: %s", out)
+	}
+	if !strings.Contains(out, "ID-01") {
 		t.Fatalf("offending id not named: %s", out)
 	}
 }
