@@ -5,6 +5,6 @@
 /grammars/*/
 /internal/lexer/generated/
 /internal/conformance/testdata/files/
-/doc/Confidential.adoc
+/doc/
 coverage.out
 *.test
