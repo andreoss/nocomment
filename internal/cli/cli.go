@@ -23,6 +23,7 @@ flags:
   -l           list files whose result differs
   -e           report all errors, not only the first
   -lang name   force the language for paths and standard input
+  -s pattern   process only files whose name matches a comma-separated glob
   -version     print version and build metadata
   -h, -help    show this help
 `
@@ -35,6 +36,7 @@ type Config struct {
 	List      bool
 	AllErrors bool
 	Lang      string
+	Select    string
 	Help      bool
 	Version   bool
 	Paths     []string
@@ -54,6 +56,7 @@ func Parse(args []string) (Config, error) {
 	fs.BoolVar(&cfg.List, "l", false, "")
 	fs.BoolVar(&cfg.AllErrors, "e", false, "")
 	fs.StringVar(&cfg.Lang, "lang", "", "")
+	fs.StringVar(&cfg.Select, "s", "", "")
 	fs.BoolVar(&cfg.Help, "h", false, "")
 	fs.BoolVar(&cfg.Help, "help", false, "")
 	fs.BoolVar(&cfg.Version, "version", false, "")
@@ -88,9 +91,14 @@ func runWith(cfg Config, stdin io.Reader, stdout, stderr io.Writer, processor Pr
 	if len(cfg.Paths) == 0 {
 		return runStdin(cfg, stdin, stdout, stderr, processor)
 	}
+	sel, err := newSelector(cfg.Select)
+	if err != nil {
+		fmt.Fprintf(stderr, "nocomment: %v\n", err)
+		return 2
+	}
 	status := 0
 	for _, path := range cfg.Paths {
-		targets, err := expandPath(path, processor, files)
+		targets, err := expandPath(path, sel, processor, files)
 		if err != nil {
 			fmt.Fprintf(stderr, "nocomment: %v\n", err)
 			status = 2
@@ -215,7 +223,42 @@ func processFile(cfg Config, path string, stdout io.Writer, processor Processor,
 	}
 }
 
-func expandPath(path string, processor Processor, files FileSystem) ([]string, error) {
+type selector []string
+
+func newSelector(spec string) (selector, error) {
+	if spec == "" {
+		return nil, nil
+	}
+	var out selector
+	for _, pattern := range strings.Split(spec, ",") {
+		pattern = strings.TrimSpace(pattern)
+		if pattern == "" {
+			continue
+		}
+		if _, err := filepath.Match(pattern, "name"); err != nil {
+			return nil, fmt.Errorf("-s pattern %q: %v", pattern, err)
+		}
+		out = append(out, pattern)
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("-s needs a pattern")
+	}
+	return out, nil
+}
+
+func (s selector) selects(name string) bool {
+	if len(s) == 0 {
+		return true
+	}
+	for _, pattern := range s {
+		if ok, err := filepath.Match(pattern, name); ok && err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+func expandPath(path string, sel selector, processor Processor, files FileSystem) ([]string, error) {
 	info, err := files.Stat(path)
 	if err != nil {
 		return nil, err
@@ -223,10 +266,10 @@ func expandPath(path string, processor Processor, files FileSystem) ([]string, e
 	if !info.IsDir() {
 		return []string{path}, nil
 	}
-	return walkDir(path, processor, files)
+	return walkDir(path, sel, processor, files)
 }
 
-func walkDir(root string, processor Processor, files FileSystem) ([]string, error) {
+func walkDir(root string, sel selector, processor Processor, files FileSystem) ([]string, error) {
 	entries, err := files.ReadDir(root)
 	if err != nil {
 		return nil, err
@@ -239,7 +282,7 @@ func walkDir(root string, processor Processor, files FileSystem) ([]string, erro
 			if skipDir(entry.Name()) {
 				continue
 			}
-			sub, err := walkDir(name, processor, files)
+			sub, err := walkDir(name, sel, processor, files)
 			if err != nil {
 				return nil, err
 			}
@@ -247,6 +290,9 @@ func walkDir(root string, processor Processor, files FileSystem) ([]string, erro
 			continue
 		}
 		if strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		if !sel.selects(entry.Name()) {
 			continue
 		}
 		if !processor.Supports(name) {

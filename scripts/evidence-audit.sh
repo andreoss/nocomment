@@ -10,6 +10,16 @@ if [ ! -f "$tracker" ]; then
   exit 1
 fi
 
+rows() {
+  awk -F'|' '
+    /^\| *ID-[0-9]+ *\|/ {
+      gsub(/ /, "")
+      if ($2 ~ /^ID-[0-9]+$/ && $4 ~ /^[-x!o~]$/) printf "%s=%s\n", $2, $4
+      if ($5 ~ /^ID-[0-9]+$/ && $7 ~ /^[-x!o~]$/) printf "%s=%s\n", $5, $7
+    }
+  ' "$1"
+}
+
 owner_of() {
   awk -v id="$1" '
     /^== S/ { sprint = $2 }
@@ -27,7 +37,7 @@ owner_of() {
 
 status=0
 claimed=0
-for pair in $(sed -n 's/^| \(ID-[0-9]*\) | M[0-9]* | \([-x!o~]\) | \(ID-[0-9]*\) | M[0-9]* | \([-x!o~]\).*/\1=\2 \3=\4/p' "$tracker"); do
+for pair in $(rows "$tracker"); do
   id=${pair%=*}
   state=${pair#*=}
   case $state in

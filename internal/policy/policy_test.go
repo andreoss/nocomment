@@ -196,3 +196,23 @@ func TestEvidenceAuditRejectsADoneReviewOfABlockedId(t *testing.T) {
 		t.Fatalf("offending id not named: %s", out)
 	}
 }
+
+func TestEvidenceAuditReadsASingleIdRow(t *testing.T) {
+	dir := filepath.Join(root(t), "scratch")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	path := filepath.Join(dir, "tracker-single.adoc")
+	body := "| Id | M | Status | Id | M | Status\n\n| ID-97 | M11 | x |  |  | \n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	t.Cleanup(func() { os.Remove(path) })
+	out, ok := runAudit(t, "scratch/tracker-single.adoc")
+	if ok {
+		t.Fatalf("unreviewed single-id row accepted: %s", out)
+	}
+	if !strings.Contains(out, "ID-97") {
+		t.Fatalf("single-id row not read: %s", out)
+	}
+}

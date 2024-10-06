@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"io/fs"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -674,5 +675,121 @@ func TestReadSymlinkAllowed(t *testing.T) {
 	}
 	if out.String() != "x \n" {
 		t.Fatalf("out = %q", out.String())
+	}
+}
+
+func TestParseSelect(t *testing.T) {
+	cfg, err := Parse([]string{"-s", "*.go,*.rs", "."})
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if cfg.Select != "*.go,*.rs" {
+		t.Fatalf("Select = %q", cfg.Select)
+	}
+}
+
+func TestSelectFiltersDirectoryWalk(t *testing.T) {
+	files := newMemFS()
+	files.put("pkg/a.go", []byte("a\n"), 0o644)
+	files.put("pkg/b.rs", []byte("b\n"), 0o644)
+	files.put("pkg/sub/c.go", []byte("c\n"), 0o644)
+	files.put("pkg/sub/d.ts", []byte("d\n"), 0o644)
+	var out, errBuf bytes.Buffer
+	cfg := Config{List: true, Select: "*.go", Paths: []string{"pkg"}}
+	status := runWith(cfg, strings.NewReader(""), &out, &errBuf, fakeProcessor{
+		fn: func(string, []byte) ([]byte, error) { return []byte("x\n"), nil },
+	}, files)
+	if status != 0 {
+		t.Fatalf("status = %d, stderr = %q", status, errBuf.String())
+	}
+	got := strings.Fields(out.String())
+	want := []string{filepath.Join("pkg", "a.go"), filepath.Join("pkg", "sub", "c.go")}
+	if len(got) != len(want) {
+		t.Fatalf("listed %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("listed %v, want %v", got, want)
+		}
+	}
+}
+
+func TestSelectAcceptsSeveralPatterns(t *testing.T) {
+	files := newMemFS()
+	files.put("pkg/a.go", []byte("a\n"), 0o644)
+	files.put("pkg/b.rs", []byte("b\n"), 0o644)
+	files.put("pkg/c.ts", []byte("c\n"), 0o644)
+	var out, errBuf bytes.Buffer
+	cfg := Config{List: true, Select: "*.go, *.rs", Paths: []string{"pkg"}}
+	status := runWith(cfg, strings.NewReader(""), &out, &errBuf, fakeProcessor{
+		fn: func(string, []byte) ([]byte, error) { return []byte("x\n"), nil },
+	}, files)
+	if status != 0 {
+		t.Fatalf("status = %d, stderr = %q", status, errBuf.String())
+	}
+	if n := len(strings.Fields(out.String())); n != 2 {
+		t.Fatalf("listed %q", out.String())
+	}
+}
+
+func TestSelectKeepsTheTypeFilter(t *testing.T) {
+	files := newMemFS()
+	files.put("pkg/a.txt", []byte("a\n"), 0o644)
+	var out, errBuf bytes.Buffer
+	processor := fakeProcessor{supports: func(path string) bool { return false }}
+	cfg := Config{List: true, Select: "*.txt", Paths: []string{"pkg"}}
+	status := runWith(cfg, strings.NewReader(""), &out, &errBuf, processor, files)
+	if status != 0 {
+		t.Fatalf("status = %d, stderr = %q", status, errBuf.String())
+	}
+	if out.Len() != 0 {
+		t.Fatalf("unsupported file selected: %q", out.String())
+	}
+}
+
+func TestSelectLeavesNamedFilesAlone(t *testing.T) {
+	files := newMemFS()
+	files.put("a.rs", []byte("a\n"), 0o644)
+	var out, errBuf bytes.Buffer
+	cfg := Config{List: true, Select: "*.go", Paths: []string{"a.rs"}}
+	status := runWith(cfg, strings.NewReader(""), &out, &errBuf, fakeProcessor{
+		fn: func(string, []byte) ([]byte, error) { return []byte("x\n"), nil },
+	}, files)
+	if status != 0 {
+		t.Fatalf("status = %d, stderr = %q", status, errBuf.String())
+	}
+	if strings.TrimSpace(out.String()) != "a.rs" {
+		t.Fatalf("named file skipped: %q", out.String())
+	}
+}
+
+func TestSelectRejectsABadPattern(t *testing.T) {
+	var out, errBuf bytes.Buffer
+	cfg := Config{Select: "[", Paths: []string{"pkg"}}
+	status := runWith(cfg, strings.NewReader(""), &out, &errBuf, fakeProcessor{}, newMemFS())
+	if status != 2 {
+		t.Fatalf("status = %d", status)
+	}
+	if !strings.Contains(errBuf.String(), "-s") {
+		t.Fatalf("stderr = %q", errBuf.String())
+	}
+}
+
+func TestSelectRejectsAnEmptyPatternList(t *testing.T) {
+	var out, errBuf bytes.Buffer
+	cfg := Config{Select: ",", Paths: []string{"pkg"}}
+	status := runWith(cfg, strings.NewReader(""), &out, &errBuf, fakeProcessor{}, newMemFS())
+	if status != 2 {
+		t.Fatalf("status = %d", status)
+	}
+}
+
+func TestHelpMentionsSelect(t *testing.T) {
+	var out bytes.Buffer
+	if status := runWith(Config{Help: true}, strings.NewReader(""), &out, &bytes.Buffer{}, fakeProcessor{}, newMemFS()); status != 0 {
+		t.Fatalf("status = %d", status)
+	}
+	if !strings.Contains(out.String(), "-s ") {
+		t.Fatalf("help does not document -s: %q", out.String())
 	}
 }
