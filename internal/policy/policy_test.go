@@ -60,18 +60,18 @@ func TestMessageMode(t *testing.T) {
 }
 
 func TestRangeModeAcceptsCompliantHistory(t *testing.T) {
-	out, ok := run(t, "", "af7d31276667dfd970ef7dd50aa15870ea9f530f..HEAD")
+	out, ok := run(t, "", "1af72b6e4d1461375be754c5dc7aa06ca2d64cdc..HEAD")
 	if !ok {
 		t.Fatalf("compliant range rejected: %s", out)
 	}
 }
 
 func TestRangeModeRejectsLegacyCommits(t *testing.T) {
-	out, ok := run(t, "", "d5f8a3559d32bcb66686dd4c9288c5329a325e9a..HEAD")
+	out, ok := run(t, "", "1993b4d42c0caa4d345328e8dd58e4102079375e..HEAD")
 	if ok {
 		t.Fatalf("legacy range accepted: %s", out)
 	}
-	if !strings.Contains(out, "a6f0636") {
+	if !strings.Contains(out, "0cf8f42") {
 		t.Fatalf("offending commit not named: %s", out)
 	}
 }
@@ -103,13 +103,13 @@ func TestHookDelegatesToTheCheck(t *testing.T) {
 
 func TestRangeModeWalksEveryCommit(t *testing.T) {
 	rev := exec.Command("git", "rev-list", "--count",
-		"af7d31276667dfd970ef7dd50aa15870ea9f530f..HEAD")
+		"1af72b6e4d1461375be754c5dc7aa06ca2d64cdc..HEAD")
 	rev.Dir = root(t)
 	want, err := rev.Output()
 	if err != nil {
 		t.Fatalf("rev-list: %v", err)
 	}
-	out, ok := run(t, "", "af7d31276667dfd970ef7dd50aa15870ea9f530f..HEAD")
+	out, ok := run(t, "", "1af72b6e4d1461375be754c5dc7aa06ca2d64cdc..HEAD")
 	if !ok {
 		t.Fatalf("compliant range rejected: %s", out)
 	}
@@ -142,7 +142,7 @@ func TestEvidenceAuditRejectsAnIdWithoutReview(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	path := filepath.Join(dir, "tracker-fixture.adoc")
-	body := "| Id | M | Status | Id | M | Status\n\n| ID-99 | M10 | x | ID-98 | M10 | -\n"
+	body := "| Id | M | Status | Id | M | Status\n\n| ID-9999 | M99 | x | ID-9998 | M99 | -\n"
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestEvidenceAuditRejectsAnIdWithoutReview(t *testing.T) {
 	if ok {
 		t.Fatalf("unreviewed id accepted: %s", out)
 	}
-	if !strings.Contains(out, "ID-99") {
+	if !strings.Contains(out, "ID-9999") {
 		t.Fatalf("offending id not named: %s", out)
 	}
 }
@@ -203,7 +203,7 @@ func TestEvidenceAuditReadsASingleIdRow(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	path := filepath.Join(dir, "tracker-single.adoc")
-	body := "| Id | M | Status | Id | M | Status\n\n| ID-97 | M11 | x |  |  | \n"
+	body := "| Id | M | Status | Id | M | Status\n\n| ID-9997 | M99 | x |  |  | \n"
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -212,7 +212,7 @@ func TestEvidenceAuditReadsASingleIdRow(t *testing.T) {
 	if ok {
 		t.Fatalf("unreviewed single-id row accepted: %s", out)
 	}
-	if !strings.Contains(out, "ID-97") {
+	if !strings.Contains(out, "ID-9997") {
 		t.Fatalf("single-id row not read: %s", out)
 	}
 }
