@@ -1,7 +1,7 @@
 GO ?= go
 ANTLR_VERSION ?= 4.13.2
 
-.PHONY: all generate fetch build test corpus bench cover vet release repro clean
+.PHONY: all generate fetch build test corpus bench cover cover-gate vet release repro clean
 
 all: generate build
 
@@ -25,6 +25,9 @@ bench: generate
 
 cover: generate
 	$(GO) test -cover ./internal/cli ./internal/filter ./internal/lang ./internal/langs ./internal/lexer ./internal/process ./internal/scan
+
+cover-gate: generate
+	./scripts/cover-gate.sh
 
 vet: generate
 	$(GO) vet ./...

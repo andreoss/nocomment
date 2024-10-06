@@ -27,7 +27,8 @@ jobs:
       - run: sh scripts/fetch-corpus.sh
         shell: bash
       - run: go test ./internal/conformance/... ./internal/property/...
-      - run: go test -cover ./internal/cli ./internal/filter ./internal/lang ./internal/langs ./internal/lexer ./internal/process ./internal/scan
+      - run: sh scripts/cover-gate.sh
+        shell: bash
       - run: go test ./internal/bench/...
 
   platform:
