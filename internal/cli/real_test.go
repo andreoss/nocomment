@@ -135,3 +135,30 @@ func TestRealWriteRefusesAReadOnlyFile(t *testing.T) {
 		t.Fatalf("read-only file was rewritten: %q", got)
 	}
 }
+func TestRealDirectoryWalkWithSelect(t *testing.T) {
+	dir := realDir(t)
+	if err := os.MkdirAll(filepath.Join(dir, "sub"), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	for name, body := range map[string]string{
+		"a.go":     "package a\n// drop\nvar A = 1\n",
+		"sub/c.go": "package c\n// drop\nvar C = 1\n",
+		"sub/d.ts": "const d = 1\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+	}
+	var out, errBuf bytes.Buffer
+	cfg := Config{List: true, Select: "*.go", Paths: []string{dir}}
+	if status := Run(cfg, strings.NewReader(""), &out, &errBuf, realProcessor{}); status != 0 {
+		t.Fatalf("status = %d, stderr = %q", status, errBuf.String())
+	}
+	listed := strings.Fields(out.String())
+	if len(listed) != 2 {
+		t.Fatalf("listed %v", listed)
+	}
+	if filepath.Base(listed[0]) != "a.go" || filepath.Base(listed[1]) != "c.go" {
+		t.Fatalf("listed %v", listed)
+	}
+}
