@@ -216,3 +216,49 @@ func TestEvidenceAuditReadsASingleIdRow(t *testing.T) {
 		t.Fatalf("single-id row not read: %s", out)
 	}
 }
+
+func TestRecordRunRefusesBadInput(t *testing.T) {
+	cases := [][]string{
+		{},
+		{"S33"},
+		{"S99", "windows/amd64", "https://example.invalid/run/1"},
+		{"S33", "plan9/386", "https://example.invalid/run/1"},
+		{"S33", "windows/amd64", "https://example.invalid/run/1", "maybe"},
+	}
+	for _, args := range cases {
+		cmd := exec.Command("sh", append([]string{"scripts/record-run.sh"}, args...)...)
+		cmd.Dir = root(t)
+		if out, err := cmd.CombinedOutput(); err == nil {
+			t.Fatalf("accepted %v: %s", args, out)
+		}
+	}
+}
+
+func TestRecordRunAppendsToTheRecord(t *testing.T) {
+	dir := root(t)
+	path := filepath.Join(dir, "doc/ops/records/S47.adoc")
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	t.Cleanup(func() { os.WriteFile(path, before, 0o644) })
+	cmd := exec.Command("sh", "scripts/record-run.sh", "S47", "windows/amd64",
+		"https://example.invalid/run/42")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("record-run: %v: %s", err, out)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	text := string(after)
+	for _, want := range []string{"Hosted run: windows/amd64", "run/42", "Result: green"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("record lacks %q", want)
+		}
+	}
+	if len(after) <= len(before) {
+		t.Fatal("record did not grow")
+	}
+}
